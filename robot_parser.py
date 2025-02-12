@@ -28,7 +28,27 @@ def read_file(filename):
 filename = "input.txt"
 lines = read_file(filename)
 
-print(f"Archivo {filename}:")
-print(lines)
+if lines:
+    print(f"Archivo {filename}:")
+    print(lines)
+
+
+# Caso 2: Archivo no existe
+
+filename = "input2.txt"
+lines = read_file(filename)
+
+if lines:
+    print(f"Archivo {filename}:")
+    print(lines)
+
+# Funcion 2 - Tokenizar
+
+    """
+    Tokeniza una línea de entrada dividiéndola en palabras clave, números y operadores sin usar librerías externas.
+    :param line: Línea de texto a procesar
+    :return: Lista de tokens
+    """
+    
 
 
