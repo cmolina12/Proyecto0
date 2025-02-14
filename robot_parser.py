@@ -1,6 +1,4 @@
 
-VALID_COMMANDS = ['M', 'R', 'C', 'B', 'c', 'b', 'P']  # Comandos sin parámetros
-
 # Funcion 1 - Lectura de archivo
 
 def read_file(filename):
@@ -90,7 +88,7 @@ def process_file(filename):
 
 #process_file('input.txt')
 
-#process_file('ejemploenunciado.txt')
+process_file('ejemplo_valido.txt')
 
 def validate_variable_declaration(tokens):
     """
