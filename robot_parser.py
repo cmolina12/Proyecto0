@@ -1,4 +1,6 @@
 
+VALID_COMMANDS = ['M', 'R', 'C', 'B', 'c', 'b', 'P']  # Comandos sin parámetros
+
 # Funcion 1 - Lectura de archivo
 
 def read_file(filename):
@@ -88,4 +90,59 @@ def process_file(filename):
 
 #process_file('input.txt')
 
-process_file('ejemplo_valido.txt')
+#process_file('ejemploenunciado.txt')
+
+def validate_variable_declaration(tokens):
+    """
+    Valida si una lista de tokens corresponde a una declaración de variables válida.
+    :param tokens: Lista de tokens de la línea.
+    :return: True si la declaración es válida, False en caso contrario.
+    """
+    # La declaración debe comenzar y terminar con '|'
+    
+    if tokens[0] != '|' or tokens[-1] != '|':
+        return False
+    
+    # Verificar que los tokens intermedios sean alfanumericos
+    
+    variables = tokens[1:-1] # Extraer los tokens intermedios
+    
+    for variable in variables:
+        if variable.isalnum() == False:
+            return False    
+    
+    # Comprobar que no haya tokens repetidos (variables duplicadas)
+    
+    if len(set(variables)) != len(variables):
+        return False
+    
+    return True # Si todas las validaciones pasan, la declaración es válida
+
+def validate_procedure_declaration(tokens):
+    """
+    Valida si una lista de tokens corresponde a una declaración de procedimiento válida.
+    :param tokens: Lista de tokens de la línea.
+    :return: True si la declaración es válida, False en caso contrario.
+    """
+    
+    if not tokens or tokens[0] != "proc": # La declaración debe comenzar con "proc"
+        return False
+    
+    if len(tokens) < 3 or not tokens[1].isalnum() or not tokens[1][0].islower():
+        return False # El nombre del procedimiento debe ser alfanumérico y comenzar con minúscula, ademas de tener al menos 3 tokens por el formato de un procedimiento
+    
+     # Validar los corchetes del bloque
+    if tokens[-1] != ']' or '[' not in tokens:
+        return False  # Debe terminar con "]" y contener "["
+    
+    # Validar parámetros (opcional)
+    params = tokens[2:tokens.index('[')] if '[' in tokens else []
+    for i, param in enumerate(params):
+        if i % 2 == 0 and param != ':':  # Alternan ":" y nombres
+            if not param.isalnum():
+                return False
+
+    return True
+
+
+# Usar todas las funciones con archivo de ejemplo

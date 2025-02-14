@@ -1,0 +1,20 @@
+|nom x y one|
+
+proc putChips: n andBalloons: m [
+    |c, b|
+    c := n .
+    b := m .
+    put: c ofType: #chips . put: b ofType: #balloons]
+
+proc goNorth [
+while: canMove: 1 inDir: #north do: [ move: 1 inDir: #north . ]
+]
+
+proc goWest [
+if: canMove: 1 inDir: #west then: [ move: 1 inDir: #west ] else
+    : [ nop .]]
+
+[
+    goTo: 3 with: 3 .
+    putChips: 2 andBalloons: 1 .
+]
