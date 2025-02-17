@@ -445,3 +445,253 @@ print("Variables globales:", global_vars)
 print("Variables locales por procedimiento:", local_vars)
 print(f"Resultado de la validación: {validate_variable_access(lines, global_vars, local_vars)}")
             
+def extract_declared_variables(lines):
+    """
+    Extrae todas las variables declaradas en el programa, incluyendo globales, locales y parámetros.
+    :param lines: Lista de líneas del programa.
+    :return: Un conjunto `declared_vars` con todas las variables declaradas,
+             y un diccionario `procedures` con los procedimientos y sus parámetros.
+    """
+    
+    declared_vars = set()
+    procedures = {}
+    inside_proc = False
+    current_proc = None
+
+    for line in lines:
+        tokens = line.strip().split()
+        
+        # 📌 Variables Globales (al inicio, dentro de `| ... |`)
+        if tokens and tokens[0].startswith("|") and tokens[-1].endswith("|"):
+            declared_vars.update(tokens[1:-1])
+        
+        # 📌 Detectar Procedimiento
+        elif tokens and tokens[0] == "proc":
+            current_proc = tokens[1]  # Guardamos el nombre del procedimiento
+            inside_proc = True
+            
+            # 📌 Extraer Parámetros del Procedimiento
+            params = set()
+            i = 1
+            while i < len(tokens) - 1:
+                if tokens[i].endswith(":") and (i + 1) < len(tokens):
+                    params.add(tokens[i + 1])  # Guardamos parámetro
+                i += 1
+
+            procedures[current_proc] = params
+            declared_vars.update(params)
+
+        # 📌 Variables Locales dentro del Procedimiento (| ... |)
+        elif inside_proc and tokens and tokens[0].startswith("|") and tokens[-1].endswith("|"):
+            declared_vars.update(tokens[1:-1])
+
+        # 📌 Fin del Procedimiento
+        elif inside_proc and tokens == ["]"]:
+            inside_proc = False
+            current_proc = None
+
+    return declared_vars, procedures
+
+
+def validate_program(lines):
+    """
+    Valida el programa completo permitiendo múltiples instrucciones en una misma línea.
+    """
+
+    declared_vars, procedures = extract_declared_variables(lines)
+
+    for line in lines:
+        # 📌 Dividir la línea en instrucciones separadas por `.`
+        instructions = [instr.strip() for instr in line.split(".") if instr.strip()]
+
+        for instr in instructions:
+            tokens = instr.split()
+
+            if not validate_instruction(tokens, declared_vars, procedures):
+                print(f"❌ Error en la instrucción: {instr}")
+                return False
+
+    print("✅ El programa es válido.")
+    return True
+
+def validate_instruction(tokens, declared_vars, procedures):
+    """
+    Detecta y valida instrucciones en cualquier parte de la línea.
+    
+    :param tokens: Lista de tokens de la instrucción.
+    :param declared_vars: Conjunto de variables declaradas.
+    :param procedures: Diccionario con los procedimientos y sus parámetros.
+    :return: True si la instrucción es válida, False si hay errores.
+    """
+    
+    if not tokens:
+        return True  # Línea vacía, no hay nada que validar
+
+    for i, token in enumerate(tokens):  
+        if token == "goto:":
+            return validate_goto(tokens[i:], declared_vars)
+
+        elif token == "move:":
+            return validate_move(tokens[i:], declared_vars)
+
+        elif token == "turn:":
+            return validate_turn(tokens[i:])
+
+        elif token == "face:":
+            return validate_face(tokens[i:])
+
+        elif token == "put:" or token == "pick:":
+            return validate_put_pick(tokens[i:], declared_vars)
+
+        elif token in procedures:
+            return validate_procedure_call(tokens[i:], procedures)
+
+        elif ":=" in token:
+            return validate_variable_assignment(tokens[i:])
+
+        elif token.startswith("#"):
+            return validate_constant(token)
+
+    print(f"❌ Error: Instrucción desconocida en `{tokens}`.")
+    return False
+
+def validate_goto(tokens, declared_vars):
+    """
+    Valida una instrucción `goto: x with: y .`
+    """
+    
+    if len(tokens) < 5:
+        print(f"❌ Error: `goto` mal formado: {' '.join(tokens)}")
+        return False
+    
+    command, x, with_keyword, y, end_symbol = tokens[:5]
+
+    if command != "goto:":
+        print(f"❌ Error: Se esperaba `goto:` pero se encontró `{command}`.")
+        return False
+
+    if with_keyword != "with:":
+        print(f"❌ Error: Se esperaba `with:` pero se encontró `{with_keyword}`.")
+        return False
+
+    if not (x.isdigit() or x in declared_vars):
+        print(f"❌ Error: `{x}` debe ser un número o una variable declarada en `goto`.")
+        return False
+
+    if not (y.isdigit() or y in declared_vars):
+        print(f"❌ Error: `{y}` debe ser un número o una variable declarada en `goto`.")
+        return False
+
+    if end_symbol != ".":
+        print(f"❌ Error: Falta `.` al final de `goto`.")
+        return False
+
+    return True
+
+def validate_move(tokens, declared_vars):
+    """
+    Valida la instrucción `move: n .`
+    """
+    
+    if len(tokens) < 3:
+        print(f"❌ Error: `move` mal formado: {' '.join(tokens)}")
+        return False
+    
+    command, value, end_symbol = tokens[:3]
+
+    if command != "move:":
+        print(f"❌ Error: Se esperaba `move:` pero se encontró `{command}`.")
+        return False
+
+    if not (value.isdigit() or value in declared_vars):
+        print(f"❌ Error: `{value}` debe ser un número o una variable declarada en `move`.")
+        return False
+
+    if end_symbol != ".":
+        print(f"❌ Error: Falta `.` al final de `move`.")
+        return False
+
+    return True
+
+def validate_turn(tokens):
+    """
+    Valida la instrucción `turn: D .`
+    """
+    
+    if len(tokens) < 3:
+        print(f"❌ Error: `turn` mal formado: {' '.join(tokens)}")
+        return False
+    
+    command, direction, end_symbol = tokens[:3]
+
+    if command != "turn:":
+        print(f"❌ Error: Se esperaba `turn:` pero se encontró `{command}`.")
+        return False
+
+    if direction not in ["#left", "#right", "#around"]:
+        print(f"❌ Error: Dirección inválida `{direction}` en `turn`.")
+        return False
+
+    if end_symbol != ".":
+        print(f"❌ Error: Falta `.` al final de `turn`.")
+        return False
+
+    return True
+
+def validate_face(tokens):
+    """
+    Valida la instrucción `face: O .`
+    """
+    
+    if len(tokens) < 3:
+        print(f"❌ Error: `face` mal formado: {' '.join(tokens)}")
+        return False
+    
+    command, direction, end_symbol = tokens[:3]
+
+    if command != "face:":
+        print(f"❌ Error: Se esperaba `face:` pero se encontró `{command}`.")
+        return False
+
+    if direction not in ["#north", "#south", "#west", "#east"]:
+        print(f"❌ Error: Dirección inválida `{direction}` en `face`.")
+        return False
+
+    if end_symbol != ".":
+        print(f"❌ Error: Falta `.` al final de `face`.")
+        return False
+
+    return True
+
+def validate_put_pick(tokens, declared_vars):
+    """
+    Valida las instrucciones `put: n ofType: X .` y `pick: n ofType: X .`
+    """
+    
+    if len(tokens) < 5:
+        print(f"❌ Error: `put` o `pick` mal formado: {' '.join(tokens)}")
+        return False
+    
+    command, n, of_type, x, end_symbol = tokens[:5]
+
+    if command not in ["put:", "pick:"]:
+        print(f"❌ Error: Se esperaba `put:` o `pick:` pero se encontró `{command}`.")
+        return False
+
+    if not (n.isdigit() or n in declared_vars):
+        print(f"❌ Error: `{n}` debe ser un número o una variable declarada en `{command}`.")
+        return False
+
+    if of_type != "ofType:":
+        print(f"❌ Error: Se esperaba `ofType:` pero se encontró `{of_type}`.")
+        return False
+
+    if x not in ["#balloons", "#chips"]:
+        print(f"❌ Error: Tipo inválido `{x}` en `{command}`.")
+        return False
+
+    if end_symbol != ".":
+        print(f"❌ Error: Falta `.` al final de `{command}`.")
+        return False
+
+    return True
