@@ -428,6 +428,7 @@ def extract_declared_variables(lines):
     
     declared_vars = set()
     procedures = {}
+    identifiers = set()
     inside_proc = False
     current_proc = None
 
@@ -453,6 +454,11 @@ def extract_declared_variables(lines):
 
             procedures[current_proc] = params
             declared_vars.update(params)
+            
+            # Extraer identificadores de variables globales, ej "putChips:, andBalloons:"
+            for token in tokens[2:]:
+                if token.endswith(":"):
+                    identifiers.add(token[:-1])  # Guardamos el identificador sin ":"
 
         # 📌 Variables Locales dentro del Procedimiento (| ... |)
         elif inside_proc and tokens and tokens[0].startswith("|") and tokens[-1].endswith("|"):
@@ -463,7 +469,7 @@ def extract_declared_variables(lines):
             inside_proc = False
             current_proc = None
 
-    return declared_vars, procedures
+    return declared_vars, procedures, identifiers
 
 def merge_procedure_lines(lines):
     """
@@ -500,7 +506,7 @@ def validate_program(lines):
     merged_lines = merge_procedure_lines(lines)
 
     # 📌 Extraer variables y procedimientos desde `lines` normales
-    global_vars, procedures = extract_declared_variables(lines)
+    global_vars, procedures, identifiers = extract_declared_variables(lines)
     print("Variables globales:", global_vars)
     print("Procedimientos y parámetros:", procedures)
 
@@ -532,7 +538,7 @@ def validate_program(lines):
     for instr_line in merged_lines:  
         instr_tokens = tokenize_line_manual([instr_line])  # 📌 Tokenizar cada línea fusionada
         if instr_tokens:
-            if not validate_instruction(instr_tokens, global_vars, procedures):
+            if not validate_instruction(instr_tokens, global_vars, procedures, identifiers):
                 print(f"❌ Error en la instrucción: {' '.join(instr_tokens)}")
                 return False 
 
@@ -543,7 +549,7 @@ def validate_program(lines):
 
 
 
-def validate_instruction(tokens, declared_vars, procedures):
+def validate_instruction(tokens, declared_vars, procedures, identifiers):
     """
     Detecta y valida todas las instrucciones en cualquier parte de la línea.
     
@@ -572,7 +578,7 @@ def validate_instruction(tokens, declared_vars, procedures):
     # Buscar dentro de los tokens cualquier llamado a procedimiento
     for i, token in enumerate(tokens[2:], start=2):  # Ignoramos los dos primeros tokens
         if token in procedures:
-            return validate_procedure_call(tokens[i:], procedures, declared_vars)
+            return validate_procedure_call(tokens[i:], procedures, declared_vars, identifiers)
         
     if first_token == "goto:":
         valid = validate_goto(tokens, declared_vars) and valid  # Mantener el estado actual
@@ -612,7 +618,7 @@ def validate_instruction(tokens, declared_vars, procedures):
 
     return valid
 
-def validate_procedure_call(tokens, procedures, declared_vars):
+def validate_procedure_call(tokens, procedures, declared_vars, identifiers):
     """
     Valida una llamada a un procedimiento dentro del bloque principal.
     
@@ -622,7 +628,7 @@ def validate_procedure_call(tokens, procedures, declared_vars):
     :return: True si la llamada es válida, False en caso contrario.
     """
     proc_name = tokens[0]  # Nombre del procedimiento
-
+    print(f"Validando identifiers{identifiers}")
     if proc_name not in procedures:
         print(f"❌ Error: El procedimiento `{proc_name}` no está definido.")
         return False
@@ -633,6 +639,11 @@ def validate_procedure_call(tokens, procedures, declared_vars):
     i = 1
     while i < len(tokens):  
         if tokens[i].endswith(":"):  
+            print(tokens[i])
+            print(identifiers)
+            if tokens[i][:-1] not in identifiers:
+                print(f"❌ Error: Descriptor `{tokens[i]}` no es válido en `{proc_name}`.")
+                return False
             pass
         elif tokens[i] not in [".", "]"]:  # Evitar el punto final y corchete de cierre
             received_params.append(tokens[i])
@@ -648,7 +659,6 @@ def validate_procedure_call(tokens, procedures, declared_vars):
         if not param.isdigit() and param not in declared_vars:
             print(f"❌ Error: `{param}` en `{proc_name}` no es un número ni una variable declarada.")
             return False
-        
     
 
     return True  # ✅ Llamada válida
