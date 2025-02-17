@@ -88,7 +88,7 @@ def process_file(filename):
 
 #process_file('input.txt')
 
-process_file('ejemplo_valido.txt')
+#process_file('ejemplo_valido.txt')
 
 def validate_variable_declaration(tokens):
     """
@@ -116,31 +116,152 @@ def validate_variable_declaration(tokens):
     
     return True # Si todas las validaciones pasan, la declaración es válida
 
+# Casos de prueba declaración de variables
+
+print("------ Casos de prueba declaración de variables ------")
+
+# Caso 1: Declaración válida
+print("Caso 1: Declaración válida")
+tokens = ['|', 'x', 'y', 'z', '|']
+print(validate_variable_declaration(tokens))  # True
+
+# Caso 2: Declaración sin variables
+print("Caso 2: Declaración sin variables")
+tokens = ['|', '|']
+print(validate_variable_declaration(tokens))  # True
+
+# Caso 3: Declaración con variables repetidas
+print("Caso 3: Declaración con variables repetidas")
+tokens = ['|', 'x', 'y', 'x', '|']
+print(validate_variable_declaration(tokens))  # False
+
+# Caso 4: Declaración sin delimitadores
+print("Caso 4: Declaración sin delimitadores")
+tokens = ['x', 'y', 'z']
+print(validate_variable_declaration(tokens))  # False
+
+# Caso 5: Declaración con caracteres inválidos
+print("Caso 5: Declaración con caracteres inválidos")
+tokens = ['|', 'x', 'y', 'z', '!', '|']
+print(validate_variable_declaration(tokens))  # False
+
+# Caso 7: Declaración con un solo delimitador
+print("Caso 7: Declaración con un solo delimitador")
+tokens = ['|', 'x']
+print(validate_variable_declaration(tokens))  # False
+
+def validate_parameters(params):
+    """
+    Valida los parámetros de un procedimiento.
+    :param params: Lista de tokens correspondientes a los parámetros.
+    :return: True si los parámetros son válidos, False en caso contrario.
+    """
+    for i, token in enumerate(params):
+        if i % 2 == 0:  # Índices pares (identificadores)
+            if not token.isalnum():  # Deben ser alfanuméricos
+                print(f"Error: El token '{token}' en índice {i} no es un identificador válido.")
+                return False
+        else:  # Índices impares (descriptores con ':')
+            if not token.endswith(':'):
+                print(f"Error: El token '{token}' en índice {i} no termina con ':' (descriptor inválido).")
+                return False
+            if not token[:-1].isalnum():  # Todo menos ":" debe ser alfanumérico
+                print(f"Error: El descriptor '{token}' en índice {i} contiene caracteres inválidos.")
+                return False
+    return True
+
+
 def validate_procedure_declaration(tokens):
     """
     Valida si una lista de tokens corresponde a una declaración de procedimiento válida.
     :param tokens: Lista de tokens de la línea.
     :return: True si la declaración es válida, False en caso contrario.
     """
-    
-    if not tokens or tokens[0] != "proc": # La declaración debe comenzar con "proc"
+    if not tokens or tokens[0] != "proc":  # Validar que comience con "proc"
+        print("Error: La declaración no comienza con 'proc'.")
         return False
-    
-    if len(tokens) < 3 or not tokens[1].isalnum() or not tokens[1][0].islower():
-        return False # El nombre del procedimiento debe ser alfanumérico y comenzar con minúscula, ademas de tener al menos 3 tokens por el formato de un procedimiento
-    
-     # Validar los corchetes del bloque
+
+    if len(tokens) < 3:  # Asegurarse de que hay suficientes tokens
+        print("Error: Faltan tokens mínimos para una declaración válida.")
+        return False
+
+    # Validar el nombre del procedimiento
+    name = tokens[1]
+    if not name[:-1].isalnum() or not name[0].islower() or name[-1] != ':':
+        print(f"Error: El nombre del procedimiento '{name}' no es válido.")
+        return False
+
+    # Validar los corchetes del bloque
     if tokens[-1] != ']' or '[' not in tokens:
-        return False  # Debe terminar con "]" y contener "["
-    
-    # Validar parámetros (opcional)
-    params = tokens[2:tokens.index('[')] if '[' in tokens else []
-    for i, param in enumerate(params):
-        if i % 2 == 0 and param != ':':  # Alternan ":" y nombres
-            if not param.isalnum():
-                return False
+        print("Error: El bloque no está delimitado correctamente con '[' y ']'.")
+        return False
+
+    try:
+        # Extraer los parámetros
+        start_block = tokens.index("[")
+        params = tokens[2:start_block]  # Parámetros entre el nombre y el bloque
+        if not validate_parameters(params):  # Validar los parámetros
+            return False
+    except ValueError:
+        print("Error: No se encontró el bloque '[' en la declaración.")
+        return False
 
     return True
 
 
-# Usar todas las funciones con archivo de ejemplo
+# Casos de prueba declaracion de procedimientos
+
+print("------ Casos de prueba declaración de procedimientos ------")
+
+# Caso 1: Declaración válida
+print("Caso 1: Procedimiento sin parámetros")
+tokens = ['proc', 'goNorth:', '[', ']']
+print(validate_procedure_declaration(tokens))  # True
+# Salto de linea 
+print("")
+
+# Caso 2: Procedimiento con un parámetro
+print("Caso 2: Procedimiento con un parámetro")
+tokens = ['proc', 'moveTo:', 'x', '[', ']']
+print(validate_procedure_declaration(tokens))  # True
+print("")
+
+# Caso 3: Procedimiento con varios parámetros
+print("Caso 3: Procedimiento con varios parámetros")
+tokens = ['proc', 'putChips:', 'n', 'andBalloons:', 'm', '[', ']']
+print(validate_procedure_declaration(tokens))  # True
+print("")
+
+# Caso 4 - Parametors mal formados
+print("Caso 4: Parámetros mal formados")
+tokens = ['proc', 'putChips:', 'n', 'andBalloons', 'm', '[', ']']
+print(validate_procedure_declaration(tokens))  # False
+print("")
+
+# Caso 5 - Parámetros mal formateados (descriptor faltante)
+print("Caso 5: Parámetros mal formateados (descriptor faltante)")
+tokens = ['proc', 'putChips:', 'n', 'andBalloons', 'm', '[', ']']
+print(validate_procedure_declaration(tokens))  # False
+print("")
+
+# Caso 6 - Parámetros mal formateados (identificador inválido)
+print("Caso 6: Parámetros mal formateados (identificador inválido)")
+tokens = ['proc', 'putChips:', 'n$', 'andBalloons:', 'm', '[', ']']
+print(validate_procedure_declaration(tokens))  # False
+print("")
+
+
+# Caso 7 - Parámetros mal formateados (descriptor inválido)
+print("Caso 7: Parámetros mal formateados (descriptor inválido)")
+tokens = ['proc', 'putChips:', 'n', 'andBalloons', 'm', '[', ']']
+print(validate_procedure_declaration(tokens))  # False
+print("")
+
+# Caso 8 - Falta el bloque de procedimiento
+print("Caso 8: Falta el bloque de procedimiento")
+tokens = ['proc', 'goNorth:', 'x']
+print(validate_procedure_declaration(tokens))  # False
+print("")
+
+
+
