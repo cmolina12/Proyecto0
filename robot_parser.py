@@ -23,12 +23,12 @@ def read_file(filename):
 
 # Caso 1: Archivo existe
 
-#filename = "input.txt"
-#lines = read_file(filename)
+filename = "ejemploenunciado.txt"
+lines = read_file(filename)
 
-#if lines:
-   # print(f"Archivo {filename}:")
-    #print(lines)
+if lines:
+    print(f"Archivo {filename}:")
+    print(lines)
 
 
 # Caso 2: Archivo no existe
@@ -43,7 +43,7 @@ def read_file(filename):
 # Funcion 2 - Tokenizar
 
 
-def tokenize_line_manual(line):
+def tokenize_line_manual(lines):
     """
     Tokeniza una línea dividiéndola en palabras clave, números, operadores y separadores.
     :param line: Línea de texto a procesar.
@@ -51,25 +51,29 @@ def tokenize_line_manual(line):
     """
     tokens = []
     current_token = ""
-    for char in line:
-        if char.isspace():  # Separador: espacio
-            if current_token:
-                tokens.append(current_token)
+    
+    for line in lines:
+        for char in line:
+            if char.isspace():  # Separador: espacio
+                if current_token:
+                    tokens.append(current_token)
+                    current_token = ""
+            elif char in "():=,.;|[]":  # Separadores específicos
+                if current_token:
+                    tokens.append(current_token)
+                tokens.append(char)
                 current_token = ""
-        elif char in "():=,.;|[]":  # Separadores específicos
-            if current_token:
-                tokens.append(current_token)
-            tokens.append(char)
-            current_token = ""
-        else:
-            current_token += char  # Parte del token actual
+            else:
+                current_token += char  # Parte del token actual
 
-    # Agregar el último token si existe
-    if current_token:
-        tokens.append(current_token)
+        # Agregar el último token si existe
+        if current_token:
+            tokens.append(current_token)
 
     return tokens
 
+print("------ Casos de prueba tokenización ------")
+print(tokenize_line_manual(read_file('ejemplo_valido.txt')))
 def process_file(filename):
     """
     Lee un archivo, tokeniza cada línea y muestra los tokens.
@@ -263,5 +267,181 @@ tokens = ['proc', 'goNorth:', 'x']
 print(validate_procedure_declaration(tokens))  # False
 print("")
 
+def validate_variable_access(tokens, declared_vars):
+    """
+    Valida si una lista de tokens corresponde a un acceso a variables válido.
+    :param tokens: Lista de tokens de la línea.
+    :param declared_vars: Lista de variables declaradas.
+    :return: True si el acceso es válido, False en caso contrario.
+    """
+    for token in tokens:
+        if token not in declared_vars:
+            print(f"Error: La variable '{token}' no ha sido declarada.")
+            return False
+    return True
+
+def extract_declared_variables(lines):
+    """
+    Extrae las variables declaradas globales y locales de las líneas del programa.
+    :param lines: Lista de líneas del programa (sin tokenizar completamente).
+    :return: Diccionario con variables globales y locales por procedimiento.
+    """
+    global_vars = set()
+    local_vars = {}
+    inside_proc = False  # Bandera para saber si estamos dentro de un procedimiento
+    current_proc = None  # Nombre del procedimiento actual
+
+    for tokens in lines:
+        tokens = tokens.strip()  # Eliminar espacios en blanco extra
+
+        # VARIABLES GLOBALES (se procesan solo antes del primer procedimiento)
+        if not inside_proc and tokens.startswith('|') and tokens.endswith('|'):
+            variables = tokens[1:-1].split()  # Extraer variables globales
+            global_vars.update(variables)
+
+        # INICIO DE PROCEDIMIENTO (identifica el nombre)
+        elif tokens.startswith('proc'):
+            split_tokens = tokens.split()
+            current_proc = split_tokens[1]  # Guardar el nombre del procedimiento
+            local_vars[current_proc] = set()  # Inicializar conjunto de variables locales
+            inside_proc = True  # Ahora estamos dentro de un procedimiento
+
+        # VARIABLES LOCALES (se procesan dentro de un procedimiento, dentro de [ ])
+        elif inside_proc and tokens.startswith('|') and tokens.endswith('|'):
+            variables = tokens[1:-1].split(',')  # Extraer variables locales dentro de "| |"
+            local_vars[current_proc].update(var.strip() for var in variables)
+
+        # FIN DE PROCEDIMIENTO (cuando encontramos `]`)
+        elif inside_proc and tokens == ']':
+            inside_proc = False  # Salimos del procedimiento
+
+    return global_vars, {proc: vars for proc, vars in local_vars.items() if vars}  # Eliminar sets vacíos
 
 
+
+
+def validate_variable_access(lines, global_vars, local_vars):
+    """
+    Valida que todas las variables utilizadas en asignaciones estén correctamente declaradas.
+    También verifica que los parámetros de los procedimientos sean identificadores válidos.
+    :param lines: Lista de líneas del programa.
+    :param global_vars: Conjunto de variables globales declaradas.
+    :param local_vars: Diccionario con variables locales por procedimiento.
+    :return: True si todos los accesos a variables en asignaciones son válidos, False si hay errores.
+    """
+    
+    inside_proc = False
+    current_proc = None 
+    declared_vars = global_vars.copy()  # Inicializar con variables globales
+    params = set()  # Lista de parámetros de cada procedimiento
+    
+    for token in lines: 
+        tokens = token.strip()  # Eliminar espacios en blanco extra
+
+        # Si encontramos la declaración de un procedimiento
+        if tokens.startswith('proc'):
+            split_tokens = tokens.split()
+            current_proc = split_tokens[1]  # Guardamos el nombre del procedimiento
+            inside_proc = True
+            params.clear()  # Reiniciar la lista de parámetros para cada nuevo procedimiento
+
+            # Extraer y validar parámetros (corregido para incluir el primero correctamente)
+            i = 1  # Empezamos en 1 para capturar correctamente el primer parámetro
+            while i < len(split_tokens) - 1:
+                if split_tokens[i].endswith(":"):  # Verificamos si es un descriptor de parámetro
+                    if (i + 1) < len(split_tokens):  # Verificamos que haya un parámetro después
+                        param_name = split_tokens[i + 1]
+
+                        # Verificar que el identificador es válido
+                        if not param_name.isalnum() or param_name[0].isdigit():  # No puede empezar con número
+                            print(f"Error: El parámetro '{param_name}' en '{current_proc}' no es válido (debe ser alfanumérico y no empezar con un número).")
+                            return False
+
+                        params.add(param_name)  # Agregar el parámetro
+
+                i += 1  # Avanzar al siguiente token
+
+            # Ahora las variables accesibles incluyen globales, locales y parámetros
+            declared_vars = global_vars.union(local_vars.get(current_proc, set()))  # No se mezcla directamente con params
+            print(f"Procedimiento '{current_proc}' - Variables locales: {declared_vars}, Parámetros: {params}")
+
+        elif inside_proc and tokens == ']':  # Si encontramos el cierre del procedimiento
+            inside_proc = False
+            current_proc = None
+            declared_vars = global_vars.copy()  # Restaurar solo variables globales
+
+        else:  
+            # **Verificar solo asignaciones `:=`, ignoramos todo lo demás**
+            if ":=" in tokens:
+                words = tokens.replace(".", "").replace(",", "").split()  # Tokenizar línea
+                var_name = words[0]  # Se asume que la variable está antes de `:=`
+                if var_name.isalnum() and var_name not in declared_vars and var_name not in params:
+                    print(f"Error: La variable '{var_name}' no ha sido declarada en '{current_proc}'.")
+                    return False
+    
+    return True
+
+
+
+    
+    
+# Pruebas Funcion validate variable access
+
+print("------ Casos de prueba validación de acceso a variables ------")
+
+# Caso 1: Variables globales y locales
+#lines = read_file('ejemploenunciado.txt')
+lines = [
+    "|x y|",
+    "proc moveRobot: speed [",
+    "|distance|",
+    "distance := speed .",  # ✅ "speed" es parámetro, "distance" es local
+    "angle := distance .",  # ❌ "angle" no ha sido declarado
+    "]",
+]
+lines = [
+    "proc invalidProc: 123speed [",  # "123speed" no es un identificador válido
+    "|var1|",
+    "var1 := 5 .",
+    "]",
+]
+lines = [
+    "proc invalidProc: speed1 and: $wrongParam [",  # ❌ "$wrongParam" no es válido
+    "|var1|",
+    "var1 := 5 .",
+    "]",
+]
+lines = [
+    "|a b|",
+    "proc checkValues: num1 [",
+    "|var1|",
+    "var1 := num1 .",  # ✅ "num1" es un parámetro válido
+    "c := var1 .",  # ❌ "c" no ha sido declarado como global ni local
+    "]",
+]
+
+lines = [
+    "|a b|",
+    "proc numberTest: val1 and: val2 [",
+    "|temp|",
+    "temp := val1 .",  # ✅ "val1" es parámetro válido
+    "val2 := 10 .",  # ✅ "10" es un número, debe ignorarse en la validación
+    "a := 5 .",  # ✅ "5" es un número, debe ignorarse en la validación
+    "]",
+]
+lines = [
+    "|x y|",
+    "proc invalidUse: value1 [",
+    "|temp|",
+    "result := value1 .",  # ❌ "result" no ha sido declarado antes de usarse
+    "temp := result .",  
+    "]",
+]
+
+
+
+global_vars, local_vars = extract_declared_variables(lines)
+print("Variables globales:", global_vars)
+print("Variables locales por procedimiento:", local_vars)
+print(f"Resultado de la validación: {validate_variable_access(lines, global_vars, local_vars)}")
+            
