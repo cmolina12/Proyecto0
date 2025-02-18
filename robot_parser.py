@@ -739,6 +739,127 @@ def validate_variable_assignment(tokens):
 
     return True
 
+def validate_move_to(tokens, declared_vars):
+    """
+    Valida la instrucción `move: n toThe: D`.
+    :param tokens: Lista de tokens de la instrucción.
+    :param declared_vars: Conjunto de variables declaradas.
+    :return: True si la instrucción es válida, False si hay errores.
+    """
+    if len(tokens) != 4 or tokens[2] != "toThe:":
+        print(f"❌ Error: Formato incorrecto en `{tokens}`. Se esperaba `move: valor toThe: dirección`.")
+        return False
+
+    value = tokens[1]
+    direction = tokens[3]
+
+    if not (value.isdigit() or value in declared_vars):
+        print(f"❌ Error: `{value}` debe ser un número o una variable declarada en `{tokens[0]}`.")
+        return False
+
+    valid_directions = {"#front", "#right", "#left", "#back"}
+    if direction not in valid_directions:
+        print(f"❌ Error: `{direction}` no es una dirección válida.")
+        return False
+
+    return True
+
+def validate_move_in_dir(tokens, declared_vars):
+    """
+    Valida la instrucción `move: n inDir: O`.
+    :param tokens: Lista de tokens de la instrucción.
+    :param declared_vars: Conjunto de variables declaradas.
+    :return: True si la instrucción es válida, False si hay errores.
+    """
+    if len(tokens) != 4 or tokens[2] != "inDir:":
+        print(f"❌ Error: Formato incorrecto en `{tokens}`. Se esperaba `move: valor inDir: orientación`.")
+        return False
+
+    value = tokens[1]
+    orientation = tokens[3]
+
+    if not (value.isdigit() or value in declared_vars):
+        print(f"❌ Error: `{value}` debe ser un número o una variable declarada en `{tokens[0]}`.")
+        return False
+
+    valid_orientations = {"#north", "#south", "#west", "#east"}
+    if orientation not in valid_orientations:
+        print(f"❌ Error: `{orientation}` no es una orientación válida.")
+        return False
+
+    return True
+
+def validate_jump_to(tokens, declared_vars):
+    """
+    Valida la instrucción `jump: n toThe: D`.
+    """
+    if len(tokens) != 4 or tokens[2] != "toThe:":
+        print(f"❌ Error: Formato incorrecto en `{tokens}`. Se esperaba `jump: valor toThe: dirección`.")
+        return False
+
+    value = tokens[1]
+    direction = tokens[3]
+
+    if not (value.isdigit() or value in declared_vars):
+        print(f"❌ Error: `{value}` debe ser un número o una variable declarada en `{tokens[0]}`.")
+        return False
+
+    valid_directions = {"#front", "#right", "#left", "#back"}
+    if direction not in valid_directions:
+        print(f"❌ Error: `{direction}` no es una dirección válida.")
+        return False
+
+    return True
+def validate_jump_in_dir(tokens, declared_vars):
+    """
+    Valida la instrucción `jump: n inDir: O`.
+    """
+    if len(tokens) != 4 or tokens[2] != "inDir:":
+        print(f"❌ Error: Formato incorrecto en `{tokens}`. Se esperaba `jump: valor inDir: orientación`.")
+        return False
+
+    value = tokens[1]
+    orientation = tokens[3]
+
+    if not (value.isdigit() or value in declared_vars):
+        print(f"❌ Error: `{value}` debe ser un número o una variable declarada en `{tokens[0]}`.")
+        return False
+
+    valid_orientations = {"#north", "#south", "#west", "#east"}
+    if orientation not in valid_orientations:
+        print(f"❌ Error: `{orientation}` no es una orientación válida.")
+        return False
+
+    return True
+def validate_condition(tokens, declared_vars):
+    """
+    Valida condiciones como `facing: O`, `canMove: n inDir: D`, `canJump: n inDir: D`, etc.
+    """
+    if tokens[0] == "facing:" and len(tokens) == 2:
+        if tokens[1] in {"#north", "#south", "#west", "#east"}:
+            return True
+        print(f"❌ Error: `{tokens[1]}` no es una dirección válida en `facing:`.")
+        return False
+
+    if tokens[0] in {"canMove:", "canJump:"} and len(tokens) == 4:
+        if tokens[2] == "inDir:" and tokens[3] in {"#north", "#south", "#west", "#east"}:
+            return True
+        elif tokens[2] == "toThe:" and tokens[3] in {"#front", "#right", "#left", "#back"}:
+            return True
+        print(f"❌ Error: `{tokens}` no es una condición válida.")
+        return False
+
+    if tokens[0] in {"canPut:", "canPick:"} and len(tokens) == 4:
+        if tokens[2] == "ofType:" and tokens[3] in {"#chips", "#balloons"}:
+            return True
+        print(f"❌ Error: `{tokens[3]}` no es un tipo válido en `{tokens[0]}`.")
+        return False
+
+    if tokens[0] == "not:" and len(tokens) == 2:
+        return validate_condition(tokens[1:], declared_vars)
+
+    print(f"❌ Error: Condición desconocida `{tokens}`.")
+    return False
 
 def validate_program(lines):
     """
@@ -804,7 +925,7 @@ def validate_instruction(tokens, declared_vars, procedures, identifiers):
     valid = True  # Bandera para acumular resultados
 
     # 📌 **Lista de instrucciones válidas**
-    valid_instructions = {"goTo:", "move:", "turn:", "face:", "put:", "pick:", ":=", "proc", "|"}
+    valid_instructions = {"goTo:", "move:", "turn:", "face:", "put:", "pick:", ":=", "proc", "|", "nop"}
 
     # 📌 **Caso especial: Code Block independiente**
     if tokens[0] == "[" and tokens[-1] == "]":
@@ -835,9 +956,16 @@ def validate_instruction(tokens, declared_vars, procedures, identifiers):
         if token == ".":
             i += 1
             continue  # Saltamos el punto y seguimos con la siguiente instrucción
+
         print(f"📌 Analizando token: {token}")
+
+        # 📌 Validación de `nop .`
+        if token == "nop" and i + 1 < len(tokens) and tokens[i + 1] == ".":
+            print("✅ Instrucción `nop` válida.")
+            i += 1  # Saltar el punto después de `nop`
+
         # 📌 Solo validar si el token es una instrucción válida
-        if token in valid_instructions:
+        elif token in valid_instructions:
 
             if token == "goTo:" and i + 4 < len(tokens):  
                 valid = validate_goto(tokens[i:i+5], declared_vars) and valid
@@ -890,6 +1018,7 @@ def validate_instruction(tokens, declared_vars, procedures, identifiers):
         i += 1  # Avanzar al siguiente token
 
     return valid
+
 
 
 
