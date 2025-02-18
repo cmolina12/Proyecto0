@@ -339,7 +339,7 @@ def extract_declared_variables(lines):
             
             # 📌 Extraer Parámetros del Procedimiento
             params = set()
-            i = 2  # Empezamos en 2 para saltar 'proc' y el nombre del procedimiento
+            i = 1  # Empezamos en 1 para saltar 'proc' y el nombre del procedimiento
             while i < len(tokens) - 1:
                 if tokens[i].endswith(":") and (i + 1) < len(tokens):
                     params.add(tokens[i + 1])  # Guardamos parámetro
@@ -354,7 +354,8 @@ def extract_declared_variables(lines):
 
         # 📌 Variables Locales dentro del Procedimiento (| ... |)
         elif inside_proc and tokens and tokens[0].startswith("|") and tokens[-1].endswith("|"):
-            local_vars = {token.strip('|') for token in tokens if token != '|'}
+            local_vars = {token.replace(",", "").strip('|') for token in tokens if token != '|'}
+            
             procedures[current_proc]['local_vars'].update(local_vars)
 
         # 📌 Fin del Procedimiento
@@ -371,64 +372,85 @@ def extract_declared_variables(lines):
 def validate_variable_access(lines, global_vars, local_vars):
     """
     Valida que todas las variables utilizadas en asignaciones estén correctamente declaradas.
-    También verifica que los parámetros de los procedimientos sean identificadores válidos.
+    También verifica que los parámetros y variables locales tengan nombres válidos.
+
     :param lines: Lista de líneas del programa.
     :param global_vars: Conjunto de variables globales declaradas.
-    :param local_vars: Diccionario con variables locales por procedimiento.
+    :param local_vars: Diccionario con variables locales y parámetros por procedimiento.
     :return: True si todos los accesos a variables en asignaciones son válidos, False si hay errores.
     """
-    
+
     inside_proc = False
     current_proc = None 
-    declared_vars = global_vars.copy()  # Inicializar con variables globales
-    params = set()  # Lista de parámetros de cada procedimiento
-    
-    for token in lines: 
-        tokens = token.strip()  # Eliminar espacios en blanco extra
 
-        # Si encontramos la declaración de un procedimiento
+    print("📌 Variables globales:", global_vars)
+    print("📌 Variables locales y params por procedimiento:", local_vars)
+
+    for token in lines: 
+        tokens = token.strip()  
+
+        # 📌 1️⃣ Si encontramos la declaración de un procedimiento
         if tokens.startswith('proc'):
             split_tokens = tokens.split()
             current_proc = split_tokens[1]  # Guardamos el nombre del procedimiento
             inside_proc = True
-            params.clear()  # Reiniciar la lista de parámetros para cada nuevo procedimiento
 
-            # Extraer y validar parámetros (corregido para incluir el primero correctamente)
-            i = 1  # Empezamos en 1 para capturar correctamente el primer parámetro
+            # 📌 2️⃣ Verificar nombres de parámetros
+            i = 1  
             while i < len(split_tokens) - 1:
-                if split_tokens[i].endswith(":"):  # Verificamos si es un descriptor de parámetro
-                    if (i + 1) < len(split_tokens):  # Verificamos que haya un parámetro después
+                if split_tokens[i].endswith(":"):  
+                    if (i + 1) < len(split_tokens):  
                         param_name = split_tokens[i + 1]
 
-                        # Verificar que el identificador es válido
-                        if not param_name.isalnum() or param_name[0].isdigit():  # No puede empezar con número
-                            print(f"Error: El parámetro '{param_name}' en '{current_proc}' no es válido (debe ser alfanumérico y no empezar con un número).")
+                        # 📌 Verificar que el nombre del parámetro es válido
+                        if not param_name.isalnum() or param_name[0].isdigit():  
+                            print(f"❌ Error: Parámetro inválido '{param_name}' en '{current_proc}'.")
                             return False
 
-                        params.add(param_name)  # Agregar el parámetro
+                        print(f"✅ Parámetro '{param_name}' validado en '{current_proc}'.")
 
-                i += 1  # Avanzar al siguiente token
+                i += 1  
 
-            # Ahora las variables accesibles incluyen globales, locales y parámetros
-            declared_vars = global_vars.union(local_vars.get(current_proc, set()))  # No se mezcla directamente con params
-            #print(f"Procedimiento '{current_proc}' - Variables locales: {declared_vars}, Parámetros: {params}")
+            # 📌 Verificar nombres de variables locales
+            declared_vars = set(global_vars)  
+            if current_proc in local_vars:
+                for local_var in local_vars[current_proc]['local_vars']:
+                    if not local_var.isalnum() or local_var[0].isdigit():
+                        print(f"❌ Error: Variable local inválida '{local_var}' en '{current_proc}'.")
+                        return False
 
-        elif inside_proc and tokens == ']':  # Si encontramos el cierre del procedimiento
+                print(f"✅ Variables locales en '{current_proc}': {local_vars[current_proc]['local_vars']}")
+
+        # 📌 3️⃣ Si encontramos el cierre del procedimiento
+        elif inside_proc and tokens == ']':
             inside_proc = False
             current_proc = None
-            declared_vars = global_vars.copy()  # Restaurar solo variables globales
 
-        else:  
-            # **Verificar solo asignaciones `:=`, ignoramos todo lo demás**
-            if ":=" in tokens:
-                words = tokens.replace(".", "").replace(",", "").split()  # Tokenizar línea
-                var_name = words[0]  # Se asume que la variable está antes de `:=`
-                
-                if not var_name.isalnum() and var_name not in declared_vars and var_name not in params:
-                    print(f"Error: La variable '{var_name}' no ha sido declarada en '{current_proc}'.")
+        # 📌 4️⃣ Verificar asignaciones dentro del procedimiento
+        elif inside_proc and ":=" in tokens:
+            words = tokens.replace(".", "").replace(",", "").split()  
+            var_name = words[0]  
+
+            # 📌 Obtener las variables permitidas del procedimiento
+            allowed_vars = global_vars.union(local_vars.get(current_proc, {}).get('local_vars', set()))
+            allowed_vars.update(local_vars.get(current_proc, {}).get('params', set()))
+
+            # 📌 Verificar que la variable a la izquierda del `:=` esté declarada
+            if var_name not in allowed_vars:
+                print(f"❌ Error: La variable '{var_name}' no ha sido declarada en '{current_proc}'.")
+                return False
+            
+            # 📌 Verificar valores asignados (números o variables declaradas)
+            for token in words[2:]:  
+                if not (token.isdigit() or token in allowed_vars):
+                    print(f"❌ Error: '{token}' no es una variable declarada ni un número en '{current_proc}'.")
                     return False
-    
+            
+            print(f"✅ Asignación válida: {var_name} dentro de '{current_proc}'.")
+
+    print("✅ Todas las variables usadas en el programa han sido verificadas correctamente.")
     return True
+
 
 
 
