@@ -123,6 +123,10 @@ def validate_variable_declaration(tokens):
         print("Error: La declaración no comienza o termina con '|'.")
         return False
     
+    # Limpiar tokens de ","
+    
+    tokens = [t for t in tokens if t != ',']
+    
     # Verificar que los tokens intermedios sean alfanumericos
     
     variables = tokens[1:-1] # Extraer los tokens intermedios
@@ -611,6 +615,7 @@ def validate_move(tokens, declared_vars):
         print(f"Error: `move` mal formado: {' '.join(tokens)}")
         return False
     
+    print(tokens)
     command, value, end_symbol = tokens[:3]
 
     if command != "move:":
@@ -677,10 +682,12 @@ def validate_face(tokens):
 
     return True
 
-def validate_put_pick(tokens, declared_vars):
+def validate_put_pick(tokens, declared_vars, local_vars):
     """
     Valida las instrucciones `put: n ofType: X .` y `pick: n ofType: X .`
     """
+    
+    print(f"Entrada de put_pick: {tokens}")
     
     if len(tokens) < 5:
         print(f"❌ Error: `put` o `pick` mal formado: {' '.join(tokens)}")
@@ -692,7 +699,7 @@ def validate_put_pick(tokens, declared_vars):
         print(f"❌ Error: Se esperaba `put:` o `pick:` pero se encontró `{command}`.")
         return False
 
-    if not (n.isdigit() or n in declared_vars):
+    if not (n.isdigit() or n in declared_vars or n in local_vars):
         print(f"❌ Error: `{n}` debe ser un número o una variable declarada en `{command}`.")
         return False
 
@@ -704,9 +711,9 @@ def validate_put_pick(tokens, declared_vars):
         print(f"❌ Error: Tipo inválido `{x}` en `{command}`.")
         return False
 
-    if end_symbol != ".":
-        print(f"❌ Error: Falta `.` al final de `{command}`.")
-        return False
+    #if end_symbol != ".":
+    #    print(f"❌ Error: Falta `.` al final de `{command}`.")
+    #    return False
 
     return True
 
@@ -739,7 +746,7 @@ def validate_variable_assignment(tokens):
 
     return True
 
-def validate_move_to(tokens, declared_vars):
+#def validate_move_to(tokens, declared_vars):
     """
     Valida la instrucción `move: n toThe: D`.
     :param tokens: Lista de tokens de la instrucción.
@@ -764,7 +771,7 @@ def validate_move_to(tokens, declared_vars):
 
     return True
 
-def validate_move_in_dir(tokens, declared_vars):
+#def validate_move_in_dir(tokens, declared_vars):
     """
     Valida la instrucción `move: n inDir: O`.
     :param tokens: Lista de tokens de la instrucción.
@@ -907,6 +914,47 @@ def validate_program(lines):
     print("✅ El programa es válido.")
     return True
 
+def extraer_parametros(procedimientos):
+    # Inicializar lista para almacenar todos los parámetros
+    parametros = []
+    
+    # Iterar sobre cada procedimiento
+    for proc_nombre, proc_info in procedimientos.items():
+        # Obtener los parámetros del procedimiento actual
+        params = proc_info['params']
+        # Agregar cada parámetro a la lista si no está ya presente
+        for param in params:
+            if param not in parametros:
+                parametros.append(param)
+    
+    return parametros
+
+def extraer_variables_locales(procedimientos):
+    # Inicializar lista para almacenar todas las variables locales
+    variables_locales = []
+    
+    # Iterar sobre cada procedimiento
+    for proc_nombre, proc_info in procedimientos.items():
+        # Obtener las variables locales del procedimiento actual
+        locales = proc_info['local_vars']
+        # Agregar cada variable local a la lista si no está ya presente
+        for local in locales:
+            if local not in variables_locales:
+                variables_locales.append(local)
+    
+    return variables_locales
+
+def validate_constant(tokens):
+    # El unico requisito es que empiece por #, y el resto sea alfanumerico
+    
+    if not tokens[0].startswith("#"):
+        print(f"❌ Error: Constante '{tokens[0]}' debe empezar con '#'")
+        return False
+    if not tokens[0][1:].isalnum():
+        print(f"❌ Error: Constante '{tokens[0]}' debe ser alfanumérica")
+        return False
+    return True
+
 def validate_instruction(tokens, declared_vars, procedures, identifiers):
     """
     Detecta y valida todas las instrucciones en cualquier parte de la línea.
@@ -923,6 +971,14 @@ def validate_instruction(tokens, declared_vars, procedures, identifiers):
     print("📌 Validando instrucción:", tokens)  # Depuración
 
     valid = True  # Bandera para acumular resultados
+    
+    # Sacar parametros tambien, ignorar si es parametro
+        
+    parametros = extraer_parametros(procedures)
+    print("Parametros", parametros)
+    variables_locales = extraer_variables_locales(procedures)
+    print("Variables locales", variables_locales)
+    print(f"Variables declaradas: {declared_vars}")
 
     # 📌 **Lista de instrucciones válidas**
     valid_instructions = {"goTo:", "move:", "turn:", "face:", "put:", "pick:", ":=", "proc", "|", "nop"}
@@ -973,6 +1029,7 @@ def validate_instruction(tokens, declared_vars, procedures, identifiers):
                 i += 4  # Saltar tokens validados
 
             elif token == "move:" and i + 2 < len(tokens):
+                print("📌 Instrucción de `move` detectada.")
                 valid = validate_move(tokens[i:i+3], declared_vars) and valid
                 print("✅ Instrucción `move` válida.")
                 i += 2
@@ -989,22 +1046,40 @@ def validate_instruction(tokens, declared_vars, procedures, identifiers):
 
             elif token in ["put:", "pick:"] and i + 4 < len(tokens):
                 print("📌 Instrucción de `put` o `pick` detectada.")
-                valid = validate_put_pick(tokens[i:i+5], declared_vars) and valid
+                print(f"Entrada: {tokens[i:i+5]}")
+                valid = validate_put_pick(tokens[i:i+5], declared_vars, variables_locales) and valid
                 print(f"✅ Instrucción `{token}` válida.")
                 i += 4
 
             elif token == "|":  # 📌 Validar declaraciones de variables
-                valid = validate_variable_declaration(tokens) and valid
-                print("✅ Declaración de variables válida.")
-                break  # No hace falta revisar más en la línea
-
+                # Si detecta "|", los tokens que deberian entrar son todos hasta que encuentre en esta linea un ultimo "|"
+                end_index = i + 1
+                while end_index < len(tokens) and tokens[end_index] != "|":
+                    end_index += 1
+                if end_index < len(tokens):
+                    print(f"Entrada: {tokens[i:end_index + 1]}")
+                    valid = validate_variable_declaration(tokens[i:end_index + 1]) and valid
+                    print("✅ Declaración de variables válida.")
+                    i = end_index  # Saltar al final de la declaración de variables
+                else:
+                    print("❌ Error: Declaración de variables no termina con '|'.")
+                    valid = False
+                    break
+                
             elif token == "proc":  # 📌 Validar declaraciones de procedimientos
                 valid = validate_procedure_declaration(tokens) and valid
                 print("✅ Declaración de procedimiento válida.")
-                break  # No hace falta revisar más en la línea
+                
+            elif token[0] == "#":  # 📌 Validar constantes
+                valid = validate_constant(tokens) and valid
+                print("✅ Constante válida.")
+            
+            
 
         # 📌 Ignorar números, identificadores y descriptores
-        elif token.isdigit() or token in declared_vars or token in identifiers or token.endswith(":"):
+        
+        
+        elif token.isdigit() or token in declared_vars or token in identifiers or token.endswith(":") or token in parametros or token in variables_locales:
             pass  # Son válidos pero no necesitan validación específica
 
         # 📌 Ignorar corchetes
