@@ -443,7 +443,7 @@ def validate_variable_access(lines, global_vars, local_vars):
             # 📌 Verificar valores asignados (números o variables declaradas)
             for token in words[2:]:  
                 if not (token.isdigit() or token in allowed_vars):
-                    print(f"❌ Error: '{token}' no es una variable declarada ni un número en '{current_proc}'.")
+                    print(f"❌ Error: '{token}' no es una variable ni un parametro declarado ni un número en '{current_proc}'.")
                     return False
             
             print(f"✅ Asignación válida: {var_name} dentro de '{current_proc}'.")
@@ -462,148 +462,55 @@ def validate_variable_access(lines, global_vars, local_vars):
 
 def merge_procedure_lines(lines):
     """
-    Une las líneas de los procedimientos en bloques completos en lugar de procesarlas línea por línea.
-    :param lines: Lista de líneas del programa.
-    :return: Lista de líneas, donde cada procedimiento es tratado como una única línea.
+    Une las líneas de los procedimientos y bloques independientes en bloques completos.
     """
     merged_lines = []
-    inside_proc = False
-    current_proc = ""
+    inside_block = False
+    current_block = ""
 
     for line in lines:
         stripped_line = line.strip()
 
-        if stripped_line.startswith("proc"):  # Inicio de un procedimiento
-            inside_proc = True
-            current_proc = stripped_line  # Guardamos la primera línea del procedimiento
-        elif inside_proc:
-            current_proc += " " + stripped_line  # Agregamos la línea actual al procedimiento
-            if stripped_line == "]":  # Si encontramos el cierre, agregamos el procedimiento completo
-                merged_lines.append(current_proc)
-                inside_proc = False
-        else:
-            merged_lines.append(stripped_line)  # Guardamos líneas normales
+        if stripped_line.startswith("proc"):  # 📌 Procedimiento
+            if inside_block:
+                merged_lines.append(current_block)  # Guardar el bloque anterior
+            inside_block = True
+            current_block = stripped_line
 
+        elif stripped_line.startswith("["):  # 📌 Bloque independiente
+            if inside_block:
+                merged_lines.append(current_block)  # Guardar el bloque anterior
+            inside_block = True
+            current_block = stripped_line
+
+        elif inside_block:
+            if stripped_line == "]":  
+                # 📌 Si es solo "]", lo unimos a la última línea en lugar de agregarlo solo
+                current_block += " " + stripped_line
+                merged_lines.append(current_block)
+                inside_block = False
+            else:
+                current_block += " " + stripped_line  # Continuar agregando líneas
+
+        else:
+            if stripped_line == "]" and merged_lines:
+                # 📌 Si hay un "]" aislado, se une a la última línea
+                merged_lines[-1] += " " + stripped_line
+            else:
+                merged_lines.append(stripped_line)  # Guardamos líneas normales
+
+    # Si hay un bloque abierto al final, lo agregamos
+    if inside_block:
+        merged_lines.append(current_block)
+
+    print("📌 Líneas fusionadas:", merged_lines)
     return merged_lines
 
-def validate_program(lines):
-    """
-    Valida el programa completo permitiendo múltiples instrucciones en una misma línea.
-    """
 
-    # 📌 Unir líneas de procedimientos completos (para validación de instrucciones)
-    merged_lines = merge_procedure_lines(lines)
-
-    # 📌 Extraer variables y procedimientos desde `lines` normales
-    global_vars, procedures, identifiers = extract_declared_variables(lines)
-
-    # 📌 Validar acceso a variables usando `lines` normales
-    if not validate_variable_access(lines, global_vars, procedures):
-        print("❌ Error en acceso a variables. Programa inválido.")
-        return False
-    print("✅ Acceso a variables válido.")
-
-    # 📌 Tokenizar cada línea del programa normal (`lines`)
-    tokenized_lines = [tokenize_line_manual([line]) for line in lines]
-
-    for tokenized_line in tokenized_lines:
-        # 📌 Dividir la línea en instrucciones separadas por `.`
-        instructions = []
-        current_instruction = []
-        for token in tokenized_line:
-            if token == ".":
-                if current_instruction:
-                    instructions.append(current_instruction)
-                    current_instruction = []
-            else:
-                current_instruction.append(token)
-        
-        if current_instruction:
-            instructions.append(current_instruction)
-
-    # 📌 **Validar instrucciones usando `merged_lines`**
-    for instr_line in merged_lines:  
-        instr_tokens = tokenize_line_manual([instr_line])  # 📌 Tokenizar cada línea fusionada
-        if instr_tokens:
-            if not validate_instruction(instr_tokens, global_vars, procedures, identifiers):
-                print(f"❌ Error en la instrucción: {' '.join(instr_tokens)}")
-                return False 
-
-    print("✅ El programa es válido.")
-    return True
-
-def validate_instruction(tokens, declared_vars, procedures, identifiers):
-    """
-    Detecta y valida todas las instrucciones en cualquier parte de la línea.
-    
-    :param tokens: Lista de tokens de la instrucción.
-    :param declared_vars: Conjunto de variables declaradas.
-    :param procedures: Diccionario con los procedimientos y sus parámetros.
-    :return: True si la instrucción es válida, False si hay errores.
-    """
-
-    if not tokens:
-        return True  # Línea vacía, no hay nada que validar
-
-    first_token = tokens[0]  # Tomamos el primer token para evaluar qué instrucción es
-    
-    print("Validando instrucción:", tokens)  # Depuración
-
-    valid = True  # Bandera para acumular resultados
-
-    # 📌 Validaciones individuales, verificando si alguna falla
-    
-    if ":=" in tokens:  # 📌 Validar asignaciones de variables
-        assignments = extract_assignments(tokens)
-        valid = validate_variable_assignment(assignments) and valid
-        print("✅ Asignación válida")
-        
-    # Buscar dentro de los tokens cualquier llamado a procedimiento
-    for i, token in enumerate(tokens[2:], start=2):  # Ignoramos los dos primeros tokens
-        if token in procedures:
-            return validate_procedure_call(tokens[i:], procedures, declared_vars, identifiers)
-        
-    if first_token == "goto:":
-        valid = validate_goto(tokens, declared_vars) and valid  # Mantener el estado actual
-        print("✅ Instrucción `goto` válida.")
-
-    elif first_token == "move:":
-        valid = validate_move(tokens, declared_vars) and valid
-        print("✅ Instrucción `move` válida.")
-
-    elif first_token == "turn:":
-        valid = validate_turn(tokens) and valid
-        print("✅ Instrucción `turn` válida.")
-
-    elif first_token == "face:":
-        valid = validate_face(tokens) and valid
-        print("✅ Instrucción `face` válida.")
-
-    elif first_token in ["put:", "pick:"]:
-        valid = validate_put_pick(tokens, declared_vars) and valid
-        print(f"✅ Instrucción `{first_token}` válida.")
-
-    elif first_token == "|":  # 📌 Validar declaraciones de variables
-        valid = validate_variable_declaration(tokens) and valid
-        print("✅ Declaración de variables válida.")
-
-    elif first_token == "proc":  # 📌 Validar declaraciones de procedimientos
-        valid = validate_procedure_declaration(tokens) and valid
-        print("✅ Declaración de procedimiento válida.")
-
-
-    #elif first_token.startswith("#"):  # 📌 Validar constantes
-    #    valid = validate_constant(first_token) and valid
-
-    else:
-        print(f"❌ Error: Instrucción desconocida en `{tokens}`.")
-        valid = False
-
-    return valid
 
 def validate_procedure_call(tokens, procedures, declared_vars, identifiers):
     """
-    Valida una llamada a un procedimiento dentro del bloque principal.
+    Valida una llamada a un procedimiento dentro del bloque principal o un procedimiento.
     
     :param tokens: Lista de tokens de la instrucción.
     :param procedures: Diccionario con los procedimientos y sus parámetros.
@@ -611,12 +518,13 @@ def validate_procedure_call(tokens, procedures, declared_vars, identifiers):
     :return: True si la llamada es válida, False en caso contrario.
     """
     proc_name = tokens[0]  # Nombre del procedimiento
-    print(f"Validando identifiers{identifiers}")
+    print(f"📌 Validando llamada a procedimiento: {proc_name}")
+
     if proc_name not in procedures:
         print(f"❌ Error: El procedimiento `{proc_name}` no está definido.")
         return False
 
-    expected_params = list(procedures[proc_name])  # Parámetros esperados
+    expected_params = list(procedures[proc_name]['params'])  # Parámetros esperados
     received_params = []
     
     i = 1
@@ -625,8 +533,9 @@ def validate_procedure_call(tokens, procedures, declared_vars, identifiers):
             if tokens[i][:-1] not in identifiers:
                 print(f"❌ Error: Descriptor `{tokens[i]}` no es válido en `{proc_name}`.")
                 return False
-            pass
-        elif tokens[i] not in [".", "]"]:  # Evitar el punto final y corchete de cierre
+        elif tokens[i] in [".", "]"]:  # 📌 FIN de la llamada al procedimiento
+            break  # 🔹 Detenemos la validación aquí
+        else:  # 📌 Parámetro recibido
             received_params.append(tokens[i])
         i += 1
 
@@ -640,9 +549,10 @@ def validate_procedure_call(tokens, procedures, declared_vars, identifiers):
         if not param.isdigit() and param not in declared_vars:
             print(f"❌ Error: `{param}` en `{proc_name}` no es un número ni una variable declarada.")
             return False
-    
 
-    return True  # ✅ Llamada válida
+    print("✅ Llamada a procedimiento válida.")
+    return True
+
 
 
 def extract_assignments(tokens):
@@ -665,13 +575,13 @@ def validate_goto(tokens, declared_vars):
     """
     
     if len(tokens) < 5:
-        print(f"Error: `goto` mal formado: {' '.join(tokens)}")
+        print(f"Error: `goTo` mal formado: {' '.join(tokens)}")
         return False
     
     command, x, with_keyword, y, end_symbol = tokens[:5]
 
-    if command != "goto:":
-        print(f"Error: Se esperaba `goto:` pero se encontró `{command}`.")
+    if command != "goTo:":
+        print(f"Error: Se esperaba `goTo:` pero se encontró `{command}`.")
         return False
 
     if with_keyword != "with:":
@@ -828,6 +738,158 @@ def validate_variable_assignment(tokens):
         return False
 
     return True
+
+
+def validate_program(lines):
+    """
+    Valida el programa completo permitiendo múltiples instrucciones en una misma línea.
+    """
+
+    # 📌 Unir líneas de procedimientos completos (para validación de instrucciones)
+    merged_lines = merge_procedure_lines(lines)
+
+    # 📌 Extraer variables y procedimientos desde `lines` normales
+    global_vars, procedures, identifiers = extract_declared_variables(lines)
+
+    # 📌 Validar acceso a variables usando `lines` normales
+    if not validate_variable_access(lines, global_vars, procedures):
+        print("❌ Error en acceso a variables. Programa inválido.")
+        return False
+    print("✅ Acceso a variables válido.")
+
+    # 📌 Tokenizar cada línea del programa normal (`lines`)
+    tokenized_lines = [tokenize_line_manual([line]) for line in lines]
+
+    for tokenized_line in tokenized_lines:
+        # 📌 Dividir la línea en instrucciones separadas por `.`
+        instructions = []
+        current_instruction = []
+        for token in tokenized_line:
+            if token == ".":
+                if current_instruction:
+                    instructions.append(current_instruction)
+                    current_instruction = []
+            else:
+                current_instruction.append(token)
+        
+        if current_instruction:
+            instructions.append(current_instruction)
+
+    # 📌 **Validar instrucciones usando `merged_lines`**
+    for instr_line in merged_lines:  
+        instr_tokens = tokenize_line_manual([instr_line])  # 📌 Tokenizar cada línea fusionada
+        if instr_tokens:
+            if not validate_instruction(instr_tokens, global_vars, procedures, identifiers):
+                print(f"❌ Error en la instrucción: {' '.join(instr_tokens)}")
+                return False 
+
+    print("✅ El programa es válido.")
+    return True
+
+def validate_instruction(tokens, declared_vars, procedures, identifiers):
+    """
+    Detecta y valida todas las instrucciones en cualquier parte de la línea.
+    
+    :param tokens: Lista de tokens de la instrucción.
+    :param declared_vars: Conjunto de variables declaradas.
+    :param procedures: Diccionario con los procedimientos y sus parámetros.
+    :return: True si la instrucción es válida, False si hay errores.
+    """
+
+    if not tokens:
+        return True  # Línea vacía, no hay nada que validar
+
+    print("📌 Validando instrucción:", tokens)  # Depuración
+
+    valid = True  # Bandera para acumular resultados
+
+    # 📌 **Lista de instrucciones válidas**
+    valid_instructions = {"goTo:", "move:", "turn:", "face:", "put:", "pick:", ":=", "proc", "|"}
+
+    # 📌 **Caso especial: Code Block independiente**
+    if tokens[0] == "[" and tokens[-1] == "]":
+        print(f"✅ Bloque independiente detectado: {tokens}")
+        tokens = tokens[1:-1]  # Removemos los brackets y validamos solo el contenido
+
+    # 📌 **Validar asignaciones de variables (:=)**
+    if ":=" in tokens:
+        assignments = extract_assignments(tokens)
+        print("Asignaciones:", assignments)
+        valid = validate_variable_assignment(assignments) and valid
+        print("✅ Asignación válida")
+
+    # 📌 **Buscar dentro de la línea cualquier llamado a procedimiento**
+    start_index = 2 if tokens[0] == "proc" else 0  # Si es `proc`, los parámetros están antes
+    for i, token in enumerate(tokens[start_index:], start=start_index):
+        if token in procedures:
+            print(f"📌 Llamada a procedimiento detectada: {token}")
+            valid = validate_procedure_call(tokens[i:], procedures, declared_vars, identifiers) and valid
+            print("✅ Llamada a procedimiento válida.")
+
+    # 📌 **Segundo recorrido: analizar cada token dentro de la línea**
+    i = 0
+    while i < len(tokens):
+        token = tokens[i]
+
+        # 📌 **Ignorar puntos (`.`)**
+        if token == ".":
+            i += 1
+            continue  # Saltamos el punto y seguimos con la siguiente instrucción
+        print(f"📌 Analizando token: {token}")
+        # 📌 Solo validar si el token es una instrucción válida
+        if token in valid_instructions:
+
+            if token == "goTo:" and i + 4 < len(tokens):  
+                valid = validate_goto(tokens[i:i+5], declared_vars) and valid
+                print("✅ Instrucción `goTo` válida.")
+                i += 4  # Saltar tokens validados
+
+            elif token == "move:" and i + 2 < len(tokens):
+                valid = validate_move(tokens[i:i+3], declared_vars) and valid
+                print("✅ Instrucción `move` válida.")
+                i += 2
+
+            elif token == "turn:" and i + 2 < len(tokens):
+                valid = validate_turn(tokens[i:i+3]) and valid
+                print("✅ Instrucción `turn` válida.")
+                i += 2
+
+            elif token == "face:" and i + 2 < len(tokens):
+                valid = validate_face(tokens[i:i+3]) and valid
+                print("✅ Instrucción `face` válida.")
+                i += 2
+
+            elif token in ["put:", "pick:"] and i + 4 < len(tokens):
+                print("📌 Instrucción de `put` o `pick` detectada.")
+                valid = validate_put_pick(tokens[i:i+5], declared_vars) and valid
+                print(f"✅ Instrucción `{token}` válida.")
+                i += 4
+
+            elif token == "|":  # 📌 Validar declaraciones de variables
+                valid = validate_variable_declaration(tokens) and valid
+                print("✅ Declaración de variables válida.")
+                break  # No hace falta revisar más en la línea
+
+            elif token == "proc":  # 📌 Validar declaraciones de procedimientos
+                valid = validate_procedure_declaration(tokens) and valid
+                print("✅ Declaración de procedimiento válida.")
+                break  # No hace falta revisar más en la línea
+
+        # 📌 Ignorar números, identificadores y descriptores
+        elif token.isdigit() or token in declared_vars or token in identifiers or token.endswith(":"):
+            pass  # Son válidos pero no necesitan validación específica
+
+        # 📌 Ignorar corchetes
+        elif token in ["[", "]"]:
+            print(f"📌 Detectado bloque de código: {token}")
+
+        else:
+            print(f"❌ Error: Instrucción desconocida `{token}` en `{tokens}`.")
+            valid = False
+
+        i += 1  # Avanzar al siguiente token
+
+    return valid
 
 
 

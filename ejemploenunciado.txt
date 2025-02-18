@@ -15,6 +15,7 @@ if: canMove: 1 inDir: #west then: [ move: 1 inDir: #west ] else
     : [ nop .]]
 
 [
+    move: 3 .
     goTo: 3 with: 3 .
     putChips: 2 andBalloons: 1 .
 ]
