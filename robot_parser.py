@@ -87,8 +87,8 @@ def tokenize_line_manual(lines):
     return tokens
 
 
-print("------ Casos de prueba tokenización ------")
-print(tokenize_line_manual(read_file('ejemplo_valido.txt')))
+#print("------ Casos de prueba tokenización ------")
+#print(tokenize_line_manual(read_file('ejemplo_valido.txt')))
 def process_file(filename):
     """
     Lee un archivo, tokeniza cada línea y muestra los tokens.
@@ -296,7 +296,7 @@ def validate_procedure_declaration(tokens):
 #print(validate_procedure_declaration(tokens))  # False
 #print("")
 
-def validate_variable_access(tokens, declared_vars):
+#def validate_variable_access(tokens, declared_vars):
     """
     Valida si una lista de tokens corresponde a un acceso a variables válido.
     :param tokens: Lista de tokens de la línea.
@@ -311,40 +311,59 @@ def validate_variable_access(tokens, declared_vars):
 
 def extract_declared_variables(lines):
     """
-    Extrae las variables declaradas globales y locales de las líneas del programa.
-    :param lines: Lista de líneas del programa (sin tokenizar completamente).
-    :return: Diccionario con variables globales y locales por procedimiento.
+    Extrae todas las variables declaradas en el programa, incluyendo globales, locales y parámetros.
+    :param lines: Lista de líneas del programa.
+    :return: Un conjunto `global_vars` con todas las variables globales declaradas,
+             un diccionario `procedures` con los procedimientos y sus parámetros,
+             y un conjunto `identifiers` con todos los identificadores válidos.
     """
+    
     global_vars = set()
-    local_vars = {}
-    inside_proc = False  # Bandera para saber si estamos dentro de un procedimiento
-    current_proc = None  # Nombre del procedimiento actual
+    procedures = {}
+    identifiers = set()
+    inside_proc = False
+    current_proc = None
 
-    for tokens in lines:
-        tokens = tokens.strip()  # Eliminar espacios en blanco extra
+    for line in lines:
+        tokens = line.strip().split()
+        
+        # 📌 Variables Globales (al inicio, dentro de `| ... |`)
+        if tokens and tokens[0].startswith("|") and tokens[-1].endswith("|") and not inside_proc:
+            # Quitar el | de los tokens
+            global_vars = {token.strip('|') for token in tokens if token != '|'}
+        
+        # 📌 Detectar Procedimiento
+        elif tokens and tokens[0] == "proc":
+            current_proc = tokens[1]  # Guardamos el nombre del procedimiento
+            inside_proc = True
+            
+            # 📌 Extraer Parámetros del Procedimiento
+            params = set()
+            i = 2  # Empezamos en 2 para saltar 'proc' y el nombre del procedimiento
+            while i < len(tokens) - 1:
+                if tokens[i].endswith(":") and (i + 1) < len(tokens):
+                    params.add(tokens[i + 1])  # Guardamos parámetro
+                i += 1
 
-        # VARIABLES GLOBALES (se procesan solo antes del primer procedimiento)
-        if not inside_proc and tokens.startswith('|') and tokens.endswith('|'):
-            variables = tokens[1:-1].split()  # Extraer variables globales
-            global_vars.update(variables)
+            procedures[current_proc] = {'params': params, 'local_vars': set()}
+            
+            # Extraer identificadores de variables globales, ej "putChips:, andBalloons:"
+            for token in tokens[2:]:
+                if token.endswith(":"):
+                    identifiers.add(token[:-1])  # Guardamos el identificador sin ":"
 
-        # INICIO DE PROCEDIMIENTO (identifica el nombre)
-        elif tokens.startswith('proc'):
-            split_tokens = tokens.split()
-            current_proc = split_tokens[1]  # Guardar el nombre del procedimiento
-            local_vars[current_proc] = set()  # Inicializar conjunto de variables locales
-            inside_proc = True  # Ahora estamos dentro de un procedimiento
+        # 📌 Variables Locales dentro del Procedimiento (| ... |)
+        elif inside_proc and tokens and tokens[0].startswith("|") and tokens[-1].endswith("|"):
+            local_vars = {token.strip('|') for token in tokens if token != '|'}
+            procedures[current_proc]['local_vars'].update(local_vars)
 
-        # VARIABLES LOCALES (se procesan dentro de un procedimiento, dentro de [ ])
-        elif inside_proc and tokens.startswith('|') and tokens.endswith('|'):
-            variables = tokens[1:-1].split(',')  # Extraer variables locales dentro de "| |"
-            local_vars[current_proc].update(var.strip() for var in variables)
+        # 📌 Fin del Procedimiento
+        elif inside_proc and tokens == ["]"]:
+            inside_proc = False
+            current_proc = None
 
-        # FIN DE PROCEDIMIENTO (cuando encontramos `]`)
-        elif inside_proc and tokens == ']':
-            inside_proc = False  # Salimos del procedimiento
-
-    return global_vars, {proc: vars for proc, vars in local_vars.items() if vars}  # Eliminar sets vacíos
+    print("Procedimientos a probar", procedures)
+    return global_vars, procedures, identifiers
 
 
 
@@ -392,7 +411,7 @@ def validate_variable_access(lines, global_vars, local_vars):
 
             # Ahora las variables accesibles incluyen globales, locales y parámetros
             declared_vars = global_vars.union(local_vars.get(current_proc, set()))  # No se mezcla directamente con params
-            print(f"Procedimiento '{current_proc}' - Variables locales: {declared_vars}, Parámetros: {params}")
+            #print(f"Procedimiento '{current_proc}' - Variables locales: {declared_vars}, Parámetros: {params}")
 
         elif inside_proc and tokens == ']':  # Si encontramos el cierre del procedimiento
             inside_proc = False
@@ -418,58 +437,6 @@ def validate_variable_access(lines, global_vars, local_vars):
 #print("Variables locales por procedimiento:", local_vars)
 #print(f"Resultado de la validación: {validate_variable_access(lines, global_vars, local_vars)}")
             
-def extract_declared_variables(lines):
-    """
-    Extrae todas las variables declaradas en el programa, incluyendo globales, locales y parámetros.
-    :param lines: Lista de líneas del programa.
-    :return: Un conjunto `declared_vars` con todas las variables declaradas,
-             y un diccionario `procedures` con los procedimientos y sus parámetros.
-    """
-    
-    declared_vars = set()
-    procedures = {}
-    identifiers = set()
-    inside_proc = False
-    current_proc = None
-
-    for line in lines:
-        tokens = line.strip().split()
-        
-        # 📌 Variables Globales (al inicio, dentro de `| ... |`)
-        if tokens and tokens[0].startswith("|") and tokens[-1].endswith("|"):
-            declared_vars.update(tokens[1:-1])
-        
-        # 📌 Detectar Procedimiento
-        elif tokens and tokens[0] == "proc":
-            current_proc = tokens[1]  # Guardamos el nombre del procedimiento
-            inside_proc = True
-            
-            # 📌 Extraer Parámetros del Procedimiento
-            params = set()
-            i = 1
-            while i < len(tokens) - 1:
-                if tokens[i].endswith(":") and (i + 1) < len(tokens):
-                    params.add(tokens[i + 1])  # Guardamos parámetro
-                i += 1
-
-            procedures[current_proc] = params
-            declared_vars.update(params)
-            
-            # Extraer identificadores de variables globales, ej "putChips:, andBalloons:"
-            for token in tokens[2:]:
-                if token.endswith(":"):
-                    identifiers.add(token[:-1])  # Guardamos el identificador sin ":"
-
-        # 📌 Variables Locales dentro del Procedimiento (| ... |)
-        elif inside_proc and tokens and tokens[0].startswith("|") and tokens[-1].endswith("|"):
-            declared_vars.update(tokens[1:-1])
-
-        # 📌 Fin del Procedimiento
-        elif inside_proc and tokens == ["]"]:
-            inside_proc = False
-            current_proc = None
-
-    return declared_vars, procedures, identifiers
 
 def merge_procedure_lines(lines):
     """
@@ -507,8 +474,6 @@ def validate_program(lines):
 
     # 📌 Extraer variables y procedimientos desde `lines` normales
     global_vars, procedures, identifiers = extract_declared_variables(lines)
-    print("Variables globales:", global_vars)
-    print("Procedimientos y parámetros:", procedures)
 
     # 📌 Validar acceso a variables usando `lines` normales
     if not validate_variable_access(lines, global_vars, procedures):
@@ -544,10 +509,6 @@ def validate_program(lines):
 
     print("✅ El programa es válido.")
     return True
-
-
-
-
 
 def validate_instruction(tokens, declared_vars, procedures, identifiers):
     """
@@ -639,8 +600,6 @@ def validate_procedure_call(tokens, procedures, declared_vars, identifiers):
     i = 1
     while i < len(tokens):  
         if tokens[i].endswith(":"):  
-            print(tokens[i])
-            print(identifiers)
             if tokens[i][:-1] not in identifiers:
                 print(f"❌ Error: Descriptor `{tokens[i]}` no es válido en `{proc_name}`.")
                 return False
