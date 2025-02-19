@@ -1,5 +1,0 @@
-|x y|
-proc moveNorth [
-    move: 1 inDir: north .
-]
-moveNorth .
