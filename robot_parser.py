@@ -65,6 +65,12 @@ def tokenize_line_manual(lines):
                 current_token = ""
                 i += 1  # Saltamos el siguiente carácter `=`
             
+            # 📌 Unificar `else :` en `else:`
+            elif current_token == "else" and char.isspace() and i + 1 < len(line) and line[i + 1] == ":":
+                tokens.append("else:")
+                current_token = ""
+                i += 2  # Saltamos el siguiente carácter despues de `:`
+                
             # 📌 Separadores normales
             elif char.isspace():  
                 if current_token:
@@ -980,7 +986,7 @@ def validate_constant(tokens):
     if not tokens[0].startswith("#"):
         print(f"❌ Error: Constante '{tokens[0]}' debe empezar con '#'")
         return False
-    if not tokens[0][1:].isalnum():
+    if not tokens[1:].isalnum():
         print(f"❌ Error: Constante '{tokens[0]}' debe ser alfanumérica")
         return False
     return True
@@ -1038,6 +1044,7 @@ def validate_instruction(tokens, declared_vars, procedures, identifiers):
     i = 0
     while i < len(tokens):
         token = tokens[i]
+        
 
         # 📌 **Ignorar puntos (`.`)**
         if token == ".":
@@ -1045,6 +1052,7 @@ def validate_instruction(tokens, declared_vars, procedures, identifiers):
             continue  # Saltamos el punto y seguimos con la siguiente instrucción
 
         print(f"📌 Analizando token: {token}")
+
         
         # 📌 Validación de `nop .`
         if token == "nop" and i + 1 < len(tokens) and tokens[i + 1] == ".":
@@ -1052,14 +1060,22 @@ def validate_instruction(tokens, declared_vars, procedures, identifiers):
             i += 1  # Saltar el punto después de `nop`
 
         # 📌 Solo validar si el token es una instrucción válida
-        elif token in valid_instructions:
+        
+        
+        elif token in valid_instructions or token[0] == "#":
             
+            if token[0] == "#":  # 📌 Validar constante
+                print("📌 Constante detectada.")
+                print(f"Entrada: {token}")
+                valid = validate_constant(token) and valid
+                
             if token == "goTo:" and i + 4 < len(tokens):  
                 valid = validate_goto(tokens[i:i+5], declared_vars) and valid
                 print("✅ Instrucción `goTo` válida.")
                 i += 4  # Saltar tokens validados
+            
                 
-            elif token == "while:" or token == "if:" or token == "repeatTimes:":
+            elif token == "while:" or token == "repeatTimes:":
                 print(f"📌 Instrucción de `{token}` detectada.")
 
                 # 📌 Buscamos el final de la estructura (hasta el último `]`)
@@ -1075,7 +1091,31 @@ def validate_instruction(tokens, declared_vars, procedures, identifiers):
 
                 print(f"✅ Instrucción `{token}` válida.")
                 i = end_idx  # Saltamos hasta el final de la estructura
+                
+            elif token == "if:":
+                print(f"📌 Instrucción `if:` detectada.")
 
+                # 📌 Buscamos los índices de `then:` y `else:` (obligatorios en el formato)
+                
+                if_index = tokens.index("if:", i)
+
+                then_index = tokens.index("then:", i)
+
+                else_index = tokens.index("else:", i)
+                
+                
+                #bloque if
+                print(f"Prueba tecncia: {tokens[if_index:then_index]}")
+                bloque_if = tokens[if_index:then_index]
+                #bloque then
+                print(f"Prueba tecncia: {tokens[then_index:else_index]}]")  
+                bloque_then = tokens[then_index:else_index] 
+                #bloque else
+                print(f"Prueba tecncia: {tokens[else_index:]}")          
+                bloque_else = tokens[else_index:] 
+
+                valid = validate_if_then_else(bloque_if, bloque_then, bloque_else, declared_vars, procedures, identifiers) and valid
+                print(f"✅ Instrucción `if` válida.")
             elif token == "proc":  # 📌 Validar declaraciones de procedimientos
                 valid = validate_procedure_declaration(tokens) and valid
                 print("✅ Declaración de procedimiento válida.")
@@ -1129,10 +1169,6 @@ def validate_instruction(tokens, declared_vars, procedures, identifiers):
                 else:
                     print("❌ Error: Declaración de variables no termina con '|'.")
                     valid = False
-
-            elif token[0] == "#":  # 📌 Validar constantes
-                valid = validate_constant(tokens) and valid
-                print("✅ Constante válida.")
             
             
 
@@ -1182,7 +1218,7 @@ def validate_control_structure(tokens, declared_vars):
 
         return True
 
-    elif keyword == "if:":
+    #elif keyword == "if:":
         # 📌 `if: CONDITION then: [ ... ] else: [ ... ]`
         if "then:" not in tokens or "[" not in tokens or "]" not in tokens:
             print(f"❌ Error: `if` mal formado: {' '.join(tokens)}")
@@ -1197,24 +1233,90 @@ def validate_control_structure(tokens, declared_vars):
 
         return True
 
-    elif keyword == "repeatTimes:":
-        # 📌 `repeatTimes: n do: [ ... ]`
-        if len(tokens) < 5 or tokens[2] != "do:" or tokens[3] != "[" or tokens[-1] != "]":
-            print(f"❌ Error: `repeatTimes` mal formado: {' '.join(tokens)}")
-            return False
-
-        count = tokens[1]
-        if not (count.isdigit() or count in declared_vars):
-            print(f"❌ Error: `{count}` en `repeatTimes` no es un número ni una variable válida.")
-            return False
-
-        return True
-
     print(f"❌ Error: Estructura de control desconocida `{tokens}`.")
     return False
 
+def validate_if_then_else(bloque_if, bloque_then, bloque_else, declared_vars, procedures, identifiers):
+    """
+    Valida una estructura `if-then-else`.
 
+    :param bloque_if: Lista de tokens de la condición del `if`.
+    :param bloque_then: Lista de tokens dentro del bloque `then`.
+    :param bloque_else: Lista de tokens dentro del bloque `else`.
+    :param declared_vars: Conjunto de variables declaradas.
+    :param procedures: Diccionario con los procedimientos declarados.
+    :param identifiers: Conjunto de identificadores válidos.
+    :return: True si la estructura es válida, False si hay errores.
+    """
 
+    print(f"📌 Validando if-then-else:")
+    print(f"  - Condición: {bloque_if}")
+    print(f"  - THEN: {bloque_then}")
+    print(f"  - ELSE: {bloque_else}")
+
+    # 📌 1️⃣ **Validar la condición del IF**
+    
+    #quitemos if: del bloque para sacar condicion
+    bloque_if_condicion = bloque_if[1:]
+    bloque_then_block = bloque_then[1:]
+    bloque_else_block = bloque_else[1:]
+    
+    if not validate_condition(bloque_if_condicion, declared_vars):
+        print(f"❌ Error en la condición del `if`: {bloque_if_condicion}")
+        return False
+
+    # 📌 2️⃣ **Validar que los bloques THEN y ELSE tengan `[` y `]` correctamente**
+    if bloque_then_block[0] != "[" or bloque_then_block[-1] != "]":
+        print(f"❌ Error: Bloque THEN mal formado: {bloque_then_block}")
+        return False
+
+    if bloque_else_block[0] != "[" or bloque_else_block[-1] != "]":
+        print(f"❌ Error: Bloque ELSE mal formado: {bloque_else_block}")
+        return False
+
+    # 📌 3️⃣ **Validar instrucciones dentro de los bloques THEN y ELSE**
+    valid = True
+
+    if bloque_then_block[-1] == "]":
+        instrucciones_then = bloque_then_block[1:-1]  # Quitamos los corchetes `[ ... ]`
+    else:
+        instrucciones_then = bloque_then_block
+    if bloque_else_block[-1] == "]":
+        instrucciones_else = bloque_else_block[1:-1]  # Quitamos los corchetes `[ ... ]`
+    else:
+        instrucciones_else = bloque_else_block
+
+    # agregar 
+    print(f"📌 Validando instrucciones en THEN: {instrucciones_then}")
+    i = 0
+    while i < len(instrucciones_then):
+        instr_tokens = []
+        while i < len(instrucciones_then):
+            instr_tokens.append(instrucciones_then[i])
+            i += 1
+        if instr_tokens:
+            valid = validate_instruction(instr_tokens, declared_vars, procedures, identifiers) and valid
+        i += 1  # Saltar el punto `.`
+
+    print(f"📌 Validando instrucciones en ELSE: {instrucciones_else}")
+    i = 0
+    while i < len(instrucciones_else):
+        instr_tokens = []
+        while i < len(instrucciones_else):
+            instr_tokens.append(instrucciones_else[i])
+            i += 1
+        if instr_tokens:
+            valid = validate_instruction(instr_tokens, declared_vars, procedures, identifiers) and valid
+        i += 1  # Saltar el punto `.`
+
+    if valid:
+        print("✅ If-then-else válido.")
+    else:
+        print("❌ Error en el bloque THEN o ELSE.")
+
+    return valid
+
+    
 
 #lines = [
 #    "|x y|",  # Variables globales
