@@ -11,7 +11,7 @@ while: canMove: 1 inDir: #north do: [ move: 1 inDir: #north . ]
 ]
 
 proc goWest [
-if: canMove: 1 inDir: #west then: [ move: 1 inDir: #west . ] else
+if: canMove: 1 inDir: #west then: [ move: 1 inDir: #west ] else
     : [ nop .]]
 
 [
