@@ -608,29 +608,56 @@ def validate_goto(tokens, declared_vars):
 
 def validate_move(tokens, declared_vars):
     """
-    Valida la instrucción `move: n .`
+    Valida las instrucciones:
+    - `move: n .` (Mover `n` pasos hacia adelante)
+    - `move: n toThe: D .` (Mover `n` pasos en una dirección `D`)
+    - `move: n inDir: O .` (Mover `n` pasos en una orientación `O`)
     """
-    
-    if len(tokens) < 3:
-        print(f"Error: `move` mal formado: {' '.join(tokens)}")
-        return False
-    
-    print(tokens)
-    command, value, end_symbol = tokens[:3]
+    VALID_DIRECTIONS = {"#front", "#right", "#left", "#back"}
+    VALID_ORIENTATIONS = {"#north", "#south", "#west", "#east"}
 
-    if command != "move:":
-        print(f"Error: Se esperaba `move:` pero se encontró `{command}`.")
-        return False
+    # 📌 Caso 1: `move: n .`
+    if len(tokens) == 3 and tokens[2] == ".":
+        _, value, end_symbol = tokens
 
-    if not (value.isdigit() or value in declared_vars):
-        print(f"Error: `{value}` debe ser un número o una variable declarada en `move`.")
-        return False
+        if not (value.isdigit() or value in declared_vars):
+            print(f"❌ Error: `{value}` debe ser un número o una variable declarada en `move`.")
+            return False
 
-    if end_symbol != ".":
-        print(f"Error: Falta `.` al final de `move`.")
-        return False
+        return True
 
-    return True
+    # 📌 Caso 2: `move: n toThe: D .`
+    if len(tokens) == 5 and tokens[2] == "toThe:" and tokens[4] == ".":
+        _, value, _, direction, end_symbol = tokens
+
+        if not (value.isdigit() or value in declared_vars):
+            print(f"❌ Error: `{value}` debe ser un número o una variable declarada en `move toThe`.")
+            return False
+
+        if direction not in VALID_DIRECTIONS:
+            print(f"❌ Error: `{direction}` no es una dirección válida en `move toThe`.")
+            return False
+
+        return True
+
+    # 📌 Caso 3: `move: n inDir: O .`
+    if len(tokens) == 5 and tokens[2] == "inDir:" and tokens[4] == ".":
+        _, value, _, orientation, end_symbol = tokens
+
+        if not (value.isdigit() or value in declared_vars):
+            print(f"❌ Error: `{value}` debe ser un número o una variable declarada en `move inDir`.")
+            return False
+
+        if orientation not in VALID_ORIENTATIONS:
+            print(f"❌ Error: `{orientation}` no es una orientación válida en `move inDir`.")
+            return False
+
+        return True
+
+    # 📌 Si no coincide con ninguna de las formas correctas:
+    print(f"❌ Error: `move` mal formado: {' '.join(tokens)}")
+    return False
+
 
 def validate_turn(tokens):
     """
@@ -817,6 +844,7 @@ def validate_jump_to(tokens, declared_vars):
         return False
 
     return True
+
 def validate_jump_in_dir(tokens, declared_vars):
     """
     Valida la instrucción `jump: n inDir: O`.
@@ -838,17 +866,19 @@ def validate_jump_in_dir(tokens, declared_vars):
         return False
 
     return True
+
 def validate_condition(tokens, declared_vars):
     """
     Valida condiciones como `facing: O`, `canMove: n inDir: D`, `canJump: n inDir: D`, etc.
     """
+    print("Verificando condición:", tokens)
     if tokens[0] == "facing:" and len(tokens) == 2:
         if tokens[1] in {"#north", "#south", "#west", "#east"}:
             return True
         print(f"❌ Error: `{tokens[1]}` no es una dirección válida en `facing:`.")
         return False
 
-    if tokens[0] in {"canMove:", "canJump:"} and len(tokens) == 4:
+    if tokens[0] in {"canMove:", "canJump:"}:
         if tokens[2] == "inDir:" and tokens[3] in {"#north", "#south", "#west", "#east"}:
             return True
         elif tokens[2] == "toThe:" and tokens[3] in {"#front", "#right", "#left", "#back"}:
@@ -968,7 +998,7 @@ def validate_instruction(tokens, declared_vars, procedures, identifiers):
     if not tokens:
         return True  # Línea vacía, no hay nada que validar
 
-    print("📌 Validando instrucción:", tokens)  # Depuración
+    print("\n📌 Validando instrucción:", tokens,"\n")  # Depuración
 
     valid = True  # Bandera para acumular resultados
     
@@ -979,9 +1009,10 @@ def validate_instruction(tokens, declared_vars, procedures, identifiers):
     variables_locales = extraer_variables_locales(procedures)
     print("Variables locales", variables_locales)
     print(f"Variables declaradas: {declared_vars}")
-
+    procedimientos = procedures.keys()
+    print(f"Procedimientos declarados: {procedimientos}")
     # 📌 **Lista de instrucciones válidas**
-    valid_instructions = {"goTo:", "move:", "turn:", "face:", "put:", "pick:", ":=", "proc", "|", "nop"}
+    valid_instructions = {"goTo:", "move:", "turn:", "face:", "put:", "pick:", ":=", "proc", "|", "nop", "while:", "if:", "repeatTimes:"}
 
     # 📌 **Caso especial: Code Block independiente**
     if tokens[0] == "[" and tokens[-1] == "]":
@@ -1014,7 +1045,7 @@ def validate_instruction(tokens, declared_vars, procedures, identifiers):
             continue  # Saltamos el punto y seguimos con la siguiente instrucción
 
         print(f"📌 Analizando token: {token}")
-
+        
         # 📌 Validación de `nop .`
         if token == "nop" and i + 1 < len(tokens) and tokens[i + 1] == ".":
             print("✅ Instrucción `nop` válida.")
@@ -1022,17 +1053,51 @@ def validate_instruction(tokens, declared_vars, procedures, identifiers):
 
         # 📌 Solo validar si el token es una instrucción válida
         elif token in valid_instructions:
-
+            
             if token == "goTo:" and i + 4 < len(tokens):  
                 valid = validate_goto(tokens[i:i+5], declared_vars) and valid
                 print("✅ Instrucción `goTo` válida.")
                 i += 4  # Saltar tokens validados
+                
+            elif token == "while:" or token == "if:" or token == "repeatTimes:":
+                print(f"📌 Instrucción de `{token}` detectada.")
 
-            elif token == "move:" and i + 2 < len(tokens):
+                # 📌 Buscamos el final de la estructura (hasta el último `]`)
+                end_idx = i
+                while end_idx < len(tokens) and tokens[end_idx] != "]":
+                    end_idx += 1
+
+                # 📌 Extraemos la instrucción completa desde `while:` hasta `]`
+                control_tokens = tokens[i:end_idx + 1]
+
+                # 📌 Validamos usando `validate_control_structure`
+                valid = validate_control_structure(control_tokens, declared_vars) and valid
+
+                print(f"✅ Instrucción `{token}` válida.")
+                i = end_idx  # Saltamos hasta el final de la estructura
+
+            elif token == "proc":  # 📌 Validar declaraciones de procedimientos
+                valid = validate_procedure_declaration(tokens) and valid
+                print("✅ Declaración de procedimiento válida.")
+                
+            elif token == "move:":
                 print("📌 Instrucción de `move` detectada.")
-                valid = validate_move(tokens[i:i+3], declared_vars) and valid
+
+                # 📌 Buscamos el final de la instrucción (primer `.` que encontramos)
+                end_idx = i
+                while end_idx < len(tokens) and tokens[end_idx] != ".":
+                    end_idx += 1
+
+                # 📌 Extraemos la instrucción completa desde `move:` hasta `.`
+                move_tokens = tokens[i:end_idx + 1]
+
+                print(f"Entrada: {move_tokens}")
+                # 📌 Validamos usando la función unificada
+                valid = validate_move(move_tokens, declared_vars) and valid
+
                 print("✅ Instrucción `move` válida.")
-                i += 2
+                i = end_idx  # Saltamos hasta el final de la instrucción
+
 
             elif token == "turn:" and i + 2 < len(tokens):
                 valid = validate_turn(tokens[i:i+3]) and valid
@@ -1064,12 +1129,7 @@ def validate_instruction(tokens, declared_vars, procedures, identifiers):
                 else:
                     print("❌ Error: Declaración de variables no termina con '|'.")
                     valid = False
-                    break
-                
-            elif token == "proc":  # 📌 Validar declaraciones de procedimientos
-                valid = validate_procedure_declaration(tokens) and valid
-                print("✅ Declaración de procedimiento válida.")
-                
+
             elif token[0] == "#":  # 📌 Validar constantes
                 valid = validate_constant(tokens) and valid
                 print("✅ Constante válida.")
@@ -1079,7 +1139,7 @@ def validate_instruction(tokens, declared_vars, procedures, identifiers):
         # 📌 Ignorar números, identificadores y descriptores
         
         
-        elif token.isdigit() or token in declared_vars or token in identifiers or token.endswith(":") or token in parametros or token in variables_locales:
+        elif token.isdigit() or token in declared_vars or token in identifiers or token.endswith(":") or token in parametros or token in variables_locales or token in procedimientos:
             pass  # Son válidos pero no necesitan validación específica
 
         # 📌 Ignorar corchetes
@@ -1093,6 +1153,65 @@ def validate_instruction(tokens, declared_vars, procedures, identifiers):
         i += 1  # Avanzar al siguiente token
 
     return valid
+
+def validate_control_structure(tokens, declared_vars):
+    """
+    Valida estructuras de control como `while`, `if` y `repeatTimes`.
+    
+    :param tokens: Lista de tokens de la instrucción.
+    :param declared_vars: Conjunto de variables declaradas.
+    :return: True si la estructura es válida, False si hay errores.
+    """
+    
+    if not tokens:
+        return False
+
+    keyword = tokens[0]
+
+    if keyword == "while:":
+        # 📌 `while: CONDITION do: [ ... ]`
+        print(f"Verificando{tokens}")
+        if len(tokens) < 5 or tokens[5] != "do:" or tokens[6] != "[" or tokens[-1] != "]":
+            print(f"❌ Error: `while` mal formado: {' '.join(tokens)}")
+            return False
+
+        condition = tokens[1:len(tokens)-1]
+    
+        if not validate_condition(condition, declared_vars):
+            return False
+
+        return True
+
+    elif keyword == "if:":
+        # 📌 `if: CONDITION then: [ ... ] else: [ ... ]`
+        if "then:" not in tokens or "[" not in tokens or "]" not in tokens:
+            print(f"❌ Error: `if` mal formado: {' '.join(tokens)}")
+            return False
+
+        then_index = tokens.index("then:")
+        else_index = tokens.index("else:") if "else:" in tokens else -1
+        condition = tokens[1:then_index]
+        print(f"Verificando{condition}")
+        if not validate_condition(condition, declared_vars):
+            return False
+
+        return True
+
+    elif keyword == "repeatTimes:":
+        # 📌 `repeatTimes: n do: [ ... ]`
+        if len(tokens) < 5 or tokens[2] != "do:" or tokens[3] != "[" or tokens[-1] != "]":
+            print(f"❌ Error: `repeatTimes` mal formado: {' '.join(tokens)}")
+            return False
+
+        count = tokens[1]
+        if not (count.isdigit() or count in declared_vars):
+            print(f"❌ Error: `{count}` en `repeatTimes` no es un número ni una variable válida.")
+            return False
+
+        return True
+
+    print(f"❌ Error: Estructura de control desconocida `{tokens}`.")
+    return False
 
 
 
