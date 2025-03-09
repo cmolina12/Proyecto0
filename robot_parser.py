@@ -335,6 +335,10 @@ def extract_declared_variables(lines):
         # 📌 Detectar Procedimiento
         elif tokens and tokens[0] == "proc":
             current_proc = tokens[1]  # Guardamos el nombre del procedimiento
+            # Verificar si es un procedimiento vacio guardar el nombre bien
+
+            if current_proc[-1] == "]" and current_proc[-2] == "[":
+                    current_proc = current_proc[0:-2]
             inside_proc = True
             
             # 📌 Extraer Parámetros del Procedimiento
@@ -883,6 +887,10 @@ def validate_instruction(tokens, declared_vars, procedures, identifiers):
         # Ignorar constantes como # siempre y cuando sea una direccion valida
         
         elif token.startswith("#") and token in ["#north", "#south", "#west", "#east", "#left", "#right", "#around"]:
+            pass
+        
+        # Si es un nombre de procedimiento ignorar
+        elif token in procedures:
             pass
 
         # 📌 Ignorar corchetes

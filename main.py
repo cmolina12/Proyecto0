@@ -4,7 +4,7 @@ import robot_parser as rp
 
 #pedirle al usuario que ingrese el nombre del archivo
 
-archivo_name = "ejemploenunciado.txt"
+archivo_name = "ejemplo2.txt"
 lines = rp.read_file(archivo_name) 
 #procesar el archivo
 
