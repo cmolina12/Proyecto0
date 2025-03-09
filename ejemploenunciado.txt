@@ -1,21 +1,13 @@
-|nom x y one|
+|b c|
 
-proc putChips: n andBalloons: m [
-    |c, b|
-    c := n .
-    b := m .
-    put: c ofType: #chips . put: b ofType: #balloons]
+proc llenarConChips [
 
-proc goNorth [
-while: canMove: 1 inDir: #north do: [ move: 1 inDir: #north . ]
+    b := 5.
+
+    while: canPut: 1 ofType: #chips. do: [put: 1 ofType: #chips.]
+
+    nop.
+
 ]
 
-proc goWest [
-if: canMove: 1 inDir: #west then: [ move: 1 inDir: #west ] else
-    : [ nop .]]
-
-[
-    move: 3 .
-    goTo: 3 with: 3 .
-    putChips: 2 andBalloons: 1 .
-]
+llenarConChips.

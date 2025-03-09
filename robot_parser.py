@@ -545,9 +545,10 @@ def validate_procedure_call(tokens, procedures, declared_vars, identifiers):
         return False
 
     # Verificar que los parámetros sean números o variables previamente declaradas
+    
     for param in received_params:
-        if not param.isdigit() and param not in declared_vars:
-            print(f"❌ Error: `{param}` en `{proc_name}` no es un número ni una variable declarada.")
+        if not (param.isdigit() or param in declared_vars or param.startswith("#")):
+            print(f"❌ Parámetro `{param}` inválido en llamada a `{proc_name}`.")
             return False
 
     print("✅ Llamada a procedimiento válida.")
@@ -830,7 +831,7 @@ def validate_instruction(tokens, declared_vars, procedures, identifiers):
     i = 0
     while i < len(tokens):
         token = tokens[i]
-
+        print(i, token)
         # 📌 **Ignorar puntos (`.`)**
         if token == ".":
             i += 1
@@ -878,6 +879,11 @@ def validate_instruction(tokens, declared_vars, procedures, identifiers):
         # 📌 Ignorar números, identificadores y descriptores
         elif token.isdigit() or token in declared_vars or token in identifiers or token.endswith(":"):
             pass  # Son válidos pero no necesitan validación específica
+        
+        # Ignorar constantes como # siempre y cuando sea una direccion valida
+        
+        elif token.startswith("#") and token in ["#north", "#south", "#west", "#east", "#left", "#right", "#around"]:
+            pass
 
         # 📌 Ignorar corchetes
         elif token in ["[", "]"]:
@@ -892,24 +898,5 @@ def validate_instruction(tokens, declared_vars, procedures, identifiers):
     return valid
 
 
-
-#lines = [
-#    "|x y|",  # Variables globales
-#    
-#    "proc example: a and: b [",  # Procedimiento con parámetros
-#    "|temp|",  # Variables locales dentro del procedimiento
-#    
-#    "temp := a .",  # Asignación de variable
-#    "goto: x with: y .",  # Uso de variables globales
-#    
-#    "move: 3 . turn: #left .",  # Dos instrucciones en la misma línea
-#    "face: #north . pick: 5 ofType: #chips .",  # Dos instrucciones en la misma línea
-#    "put: b ofType: #balloons .",  # Uso de variable parámetro
-    
-#    "]",  # Cierre del procedimiento
-#]
-
-# 📌 Probar todo el programa
-#print(validate_program(lines))  # ✅ Debe devolver True si todo está correcto
 
 
